@@ -11,10 +11,23 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
-          flutter-version: '3.35.7'
+          flutter-version: '3.44.4'
           cache: true
       - name: Generate Android platform files
-        run: flutter create . --project-name voice_studio --platforms android
+        run: flutter create . --project-name voice_studio --org com.shanpalia --platforms android
+      - name: Configure Android permissions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          s = p.read_text()
+          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+          perms = '  <uses-permission android:name="android.permission.INTERNET"/>\n  <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n'
+          if 'android.permission.RECORD_AUDIO' not in s:
+              s = s.replace(marker, marker + '\n' + perms)
+          s = s.replace('android:label="voice_studio"', 'android:label="Voice Studio"')
+          p.write_text(s)
+          PY
       - name: Get dependencies
         run: flutter pub get
       - name: Analyze
