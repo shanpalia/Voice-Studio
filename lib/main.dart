@@ -114,7 +114,7 @@ class _HomePageState extends State<HomePage> {
     tts.setCompletionHandler(() {
       if (mounted) setState(() => speaking = false);
     });
-    tts.setCancelHandler((_) {
+    tts.setCancelHandler(() {
       if (mounted) setState(() => speaking = false);
     });
     tts.setErrorHandler((_) {
