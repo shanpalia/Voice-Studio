@@ -248,8 +248,9 @@ class _HomePageState extends State<HomePage> {
     final wanted = _localePrefix(from);
     final exact = locales.where((l) => l.localeId.toLowerCase() == wanted.toLowerCase());
     if (exact.isNotEmpty) return exact.first.localeId;
+    final base = wanted.split('-').first.toLowerCase();
     final sameLanguage = locales.where(
-      (l) => l.localeId.toLowerCase().startsWith('$wanted-'),
+      (l) => l.localeId.toLowerCase().startsWith('$base-'),
     );
     return sameLanguage.isNotEmpty ? sameLanguage.first.localeId : null;
   }
