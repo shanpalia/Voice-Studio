@@ -232,7 +232,9 @@ class _HomePageState extends State<HomePage> {
             return;
           }
           // Android speech services can end a recognition session after
-          // silence. Restart it automatically until the user presses Stop.
+          // silence. Mark the session idle, then restart it automatically
+          // until the user presses Stop.
+          setState(() => listening = false);
           unawaited(
             Future<void>.delayed(const Duration(milliseconds: 250), () async {
               if (!mounted || speechUserStopped || speechAutoStop || listening) {
@@ -249,6 +251,7 @@ class _HomePageState extends State<HomePage> {
           setState(() => listening = false);
           return;
         }
+        setState(() => listening = false);
         _showMessage(error.errorMsg.isEmpty
             ? 'Speech recognition failed.'
             : 'Speech recognition: ${error.errorMsg}');
