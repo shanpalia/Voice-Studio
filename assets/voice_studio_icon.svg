@@ -1,8 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-<rect width="1024" height="1024" rx="220" fill="#12C9A0"/>
-<circle cx="512" cy="512" r="390" fill="#0EAF8D" opacity=".22"/>
-<rect x="392" y="240" width="240" height="360" rx="120" fill="#FFFFFF"/>
-<path d="M302 470c0 116 94 210 210 210s210-94 210-210" fill="none" stroke="#FFFFFF" stroke-width="48" stroke-linecap="round"/>
-<path d="M512 680v110M392 790h240" fill="none" stroke="#FFFFFF" stroke-width="48" stroke-linecap="round"/>
-<path d="M280 395c-52 55-52 139 0 194M744 395c52 55 52 139 0 194" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round"/>
+<defs>
+ <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFFFFF"/><stop offset=".55" stop-color="#EFFFFA"/><stop offset="1" stop-color="#C9FFF0"/></linearGradient>
+ <linearGradient id="mic" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#38F3B0"/><stop offset=".5" stop-color="#09BFC3"/><stop offset="1" stop-color="#0877E8"/></linearGradient>
+ <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#18BDF4"/><stop offset="1" stop-color="#0878E8"/></linearGradient>
+ <linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#43F08D"/><stop offset="1" stop-color="#05A96B"/></linearGradient>
+ <filter id="shadow"><feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#079B91" flood-opacity=".25"/></filter>
+</defs>
+<rect x="22" y="22" width="980" height="980" rx="220" fill="url(#bg)" stroke="#A9F5E3" stroke-width="10"/>
+<path d="M115 760 Q300 650 470 790 T910 750 L930 960 Q720 1030 510 930 T90 950Z" fill="#9DFFE2" opacity=".55"/>
+<g filter="url(#shadow)">
+ <path d="M95 315 Q80 205 185 165 Q285 125 365 200 Q420 255 370 390 Q275 430 170 400 Q105 385 95 315Z" fill="url(#blue)"/>
+ <path d="M929 315 Q944 205 839 165 Q739 125 659 200 Q604 255 654 390 Q749 430 854 400 Q919 385 929 315Z" fill="url(#green)"/>
+</g>
+<text x="235" y="320" text-anchor="middle" font-family="sans-serif" font-size="155" font-weight="900" fill="white">A</text>
+<text x="789" y="320" text-anchor="middle" font-family="sans-serif" font-size="145" font-weight="900" fill="white">अ</text>
+<path d="M355 165 Q512 70 669 165" fill="none" stroke="#11C9A0" stroke-width="30" stroke-linecap="round"/>
+<path d="M660 135 L705 165 L650 182Z" fill="#11C9A0"/>
+<path d="M275 430 Q160 520 230 625" fill="none" stroke="#11C9A0" stroke-width="28" stroke-linecap="round"/>
+<path d="M220 590 L245 650 L185 628Z" fill="#11C9A0"/>
+<g filter="url(#shadow)">
+ <rect x="372" y="225" width="280" height="520" rx="140" fill="url(#mic)"/>
+ <path d="M290 505 Q290 775 512 775 Q734 775 734 505" fill="none" stroke="#073F61" stroke-width="42" stroke-linecap="round"/>
+ <path d="M512 775 V875 M410 875 H614" fill="none" stroke="#073F61" stroke-width="42" stroke-linecap="round"/>
+</g>
+<path d="M372 375 H435 M372 450 H435 M652 375 H589 M652 450 H589 M372 525 H435 M652 525 H589" stroke="#063F57" stroke-width="28" stroke-linecap="round"/>
+<g fill="url(#mic)">
+ <rect x="225" y="500" width="22" height="110" rx="11"/><rect x="185" y="540" width="22" height="70" rx="11"/><rect x="799" y="500" width="22" height="110" rx="11"/><rect x="839" y="540" width="22" height="70" rx="11"/>
+</g>
 </svg>
