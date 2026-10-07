@@ -7,7 +7,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:flutter_lame/flutter_lame.dart';
+import 'package:flutter_lame_update/flutter_lame_update.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
