@@ -789,42 +789,6 @@ class _HomePageState extends State<HomePage> {
           builder: (_) => const DownloadsPage(),
         ),
       );
-      if (!mounted) return;
-
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Download complete'),
-          content: Text(
-            '"$cleanName.mp3" downloaded to Downloads/Voice Studio.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Close'),
-            ),
-            FilledButton.icon(
-              onPressed: () async {
-                Navigator.pop(dialogContext);
-                try {
-                  await const MethodChannel(
-                    'voice_studio/download',
-                  ).invokeMethod<void>(
-                    'openDownloadedFile',
-                    <String, dynamic>{'uri': savedUri},
-                  );
-                } catch (_) {
-                  if (mounted) {
-                    _showMessage('No app is available to open this MP3 file.');
-                  }
-                }
-              },
-              icon: const Icon(Icons.open_in_new_rounded),
-              label: const Text('Open'),
-            ),
-          ],
-        ),
-      );
     } catch (error) {
       if (mounted) {
         final message = error.toString().replaceFirst('Exception: ', '');
