@@ -150,32 +150,6 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
-      - name: Patch LAME Gradle CMake options
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          gradle = next(Path.home().glob('.pub-cache/hosted/pub.dev/flutter_lame_update-*/android/build.gradle'))
-          lines = gradle.read_text().splitlines(True)
-
-          kept = []
-          removed = []
-          for line in lines:
-              stripped = line.strip()
-              if 'ANDROID_ARM_NEON=TRUE' in stripped and 'ANDROID_STL=c++_shared' in stripped:
-                  removed.append(stripped)
-                  continue
-              if 'mp3lame-arm64-v8a' in stripped and 'mp3lame-x86_64' in stripped and 'targets' in stripped:
-                  removed.append(stripped)
-                  continue
-              kept.append(line)
-
-          gradle.write_text(''.join(kept))
-          print(f'Patched {gradle}; removed {len(removed)} legacy CMake line(s)')
-          for line in removed:
-              print(f'  removed: {line}')
-          PY
-
       - name: Generate launcher icons
         run: dart run flutter_launcher_icons
 
