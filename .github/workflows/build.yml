@@ -83,34 +83,36 @@ jobs:
                                       MediaStore.Downloads.MIME_TYPE,
                                       MediaStore.Downloads.RELATIVE_PATH
                                   )
-                                  val selection = "${MediaStore.Downloads.RELATIVE_PATH} = ?"
-                                  val selectionArgs = arrayOf(
-                                      Environment.DIRECTORY_DOWNLOADS + "/Voice Studio/"
-                                  )
 
+                                  val targetPath = Environment.DIRECTORY_DOWNLOADS + "/Voice Studio"
                                   contentResolver.query(
                                       MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                                       projection,
-                                      selection,
-                                      selectionArgs,
+                                      null,
+                                      null,
                                       "${MediaStore.Downloads.DATE_ADDED} DESC"
                                   )?.use { cursor ->
                                       val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
                                       val nameIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads.DISPLAY_NAME)
                                       val sizeIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads.SIZE)
                                       val mimeIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads.MIME_TYPE)
+                                      val pathIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads.RELATIVE_PATH)
 
                                       while (cursor.moveToNext()) {
-                                          val uri = Uri.withAppendedPath(
-                                              MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                                              cursor.getLong(idIndex).toString()
-                                          )
+                                          val relativePath = cursor.getString(pathIndex)?.trimEnd('/') ?: ""
+                                          val name = cursor.getString(nameIndex) ?: ""
                                           val mime = cursor.getString(mimeIndex) ?: ""
-                                          if (mime == "audio/mpeg" || cursor.getString(nameIndex).lowercase().endsWith(".mp3")) {
+                                          if (relativePath == targetPath &&
+                                              (mime.equals("audio/mpeg", ignoreCase = true) ||
+                                               name.lowercase().endsWith(".mp3"))) {
+                                              val uri = Uri.withAppendedPath(
+                                                  MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                                                  cursor.getLong(idIndex).toString()
+                                              )
                                               files.add(
                                                   mapOf(
                                                       "uri" to uri.toString(),
-                                                      "name" to cursor.getString(nameIndex),
+                                                      "name" to name,
                                                       "size" to cursor.getLong(sizeIndex)
                                                   )
                                               )
