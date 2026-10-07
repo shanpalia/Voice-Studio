@@ -4,10 +4,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
 
@@ -475,14 +475,28 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (!mounted) return;
-      final voice = _selectedVoice();
-      await SharePlus.instance.share(
-        ShareParams(
-          title: 'Voice Studio Audio',
-          text: 'Voice Studio • ${voice?['name'] ?? 'Selected voice'}',
-          files: [XFile(file.path)],
-        ),
+
+      // Save directly to Android's public Downloads folder.
+      // This uses MediaStore, so Android does not show a "Save as" dialog.
+      final savedUri = await const MethodChannel(
+        'voice_studio/download',
+      ).invokeMethod<String>(
+        'saveToDownloads',
+        <String, dynamic>{
+          'sourcePath': file.path,
+          'fileName': file.uri.pathSegments.last,
+        },
       );
+
+      await file.delete().catchError((_) => file);
+
+      if (savedUri == null || savedUri.isEmpty) {
+        throw Exception('Download failed');
+      }
+
+      if (mounted) {
+        _showMessage('Audio downloaded to Downloads/Voice Studio.');
+      }
     } catch (_) {
       if (mounted) {
         _showMessage(
