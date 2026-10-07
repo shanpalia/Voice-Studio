@@ -445,7 +445,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     final nameController = TextEditingController(
-      text: 'Voice_Studio_\${DateTime.now().millisecondsSinceEpoch}',
+      text: 'Voice_Studio_${DateTime.now().millisecondsSinceEpoch}',
     );
 
     final fileName = await showDialog<String>(
@@ -505,8 +505,8 @@ class _HomePageState extends State<HomePage> {
 
       final directory = await getApplicationDocumentsDirectory();
       final stamp = DateTime.now().millisecondsSinceEpoch;
-      final wavFile = File('\${directory.path}/voice_studio_\${stamp}.wav');
-      final mp3File = File('\${directory.path}/\${cleanName}.mp3');
+      final wavFile = File('${directory.path}/voice_studio_${stamp}.wav');
+      final mp3File = File('${directory.path}/${cleanName}.mp3');
 
       await tts.synthesizeToFile(text, wavFile.path, true);
       final wavExists = await wavFile.exists();
@@ -522,7 +522,7 @@ class _HomePageState extends State<HomePage> {
       }
 
       final session = await FFmpegKit.execute(
-        '-y -i "\${wavFile.path}" -vn -codec:a libmp3lame -b:a 128k "\${mp3File.path}"',
+        '-y -i "${wavFile.path}" -vn -codec:a libmp3lame -b:a 128k "${mp3File.path}"',
       );
       final returnCode = await session.getReturnCode();
       if (!ReturnCode.isSuccess(returnCode) ||
@@ -540,7 +540,7 @@ class _HomePageState extends State<HomePage> {
         'saveToDownloads',
         <String, dynamic>{
           'sourcePath': mp3File.path,
-          'fileName': '\${cleanName}.mp3',
+          'fileName': '${cleanName}.mp3',
         },
       );
 
@@ -557,7 +557,7 @@ class _HomePageState extends State<HomePage> {
         builder: (dialogContext) => AlertDialog(
           title: const Text('Download complete'),
           content: Text(
-            '"\${cleanName}.mp3" downloaded to Downloads/Voice Studio.',
+            '"${cleanName}.mp3" downloaded to Downloads/Voice Studio.',
           ),
           actions: [
             TextButton(
