@@ -731,7 +731,7 @@ class _HomePageState extends State<HomePage> {
       final wavFile = File('${directory.path}/voice_studio_$stamp.wav');
       final mp3File = File('${directory.path}/$cleanName.mp3');
 
-      final synthResult = await tts.synthesizeToFile(
+      await tts.synthesizeToFile(
         text,
         wavFile.path,
         true,
