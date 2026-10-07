@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -440,25 +442,65 @@ class _HomePageState extends State<HomePage> {
       _showMessage('Enter or translate text before creating audio.');
       return;
     }
+
     try {
       await tts.stop();
+      await tts.awaitSynthCompletion(true);
       await tts.setLanguage(_ttsLocale(to));
       await _applySelectedVoice();
       await tts.setSpeechRate(0.46);
       await tts.setPitch(1.0);
+      await tts.setVolume(1.0);
+
       final directory = await getApplicationDocumentsDirectory();
-      final filePath = '${directory.path}/voice_studio_${DateTime.now().millisecondsSinceEpoch}.wav';
-      await tts.synthesizeToFile(text, filePath, true);
+      final file = File(
+        '${directory.path}/voice_studio_${DateTime.now().millisecondsSinceEpoch}.wav',
+      );
+
+      // Wait for Android TTS to finish writing the file before sharing it.
+      await tts.synthesizeToFile(text, file.path, true);
+      final exists = await file.exists();
+      final size = exists ? await file.length() : 0;
+
+      if (!exists || size == 0) {
+        if (exists) {
+          await file.delete();
+        }
+        if (mounted) {
+          _showMessage(
+            'Audio could not be generated. Please check that the selected voice is installed.',
+          );
+        }
+        return;
+      }
+
       if (!mounted) return;
       final voice = _selectedVoice();
       await SharePlus.instance.share(
         ShareParams(
+          title: 'Voice Studio Audio',
           text: 'Voice Studio • ${voice?['name'] ?? 'Selected voice'}',
-          files: [XFile(filePath)],
+          files: [XFile(file.path)],
         ),
       );
     } catch (_) {
-      if (mounted) _showMessage('Audio could not be generated.');
+      if (mounted) {
+        _showMessage(
+          'Audio could not be generated. Please check your device TTS voice.',
+        );
+      }
+    }
+  }
+
+  Future<void> _copyResult() async {
+    final text = output.text.trim();
+    if (text.isEmpty) {
+      _showMessage('There is no translated result to copy.');
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: text));
+    if (mounted) {
+      _showMessage('Result copied successfully.');
     }
   }
 
@@ -834,13 +876,28 @@ class _HomePageState extends State<HomePage> {
             Row(
               children: [
                 const Expanded(
-                  child: Text('Translated result', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: dark)),
+                  child: Text(
+                    'Translated result',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: dark,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Copy result',
+                  onPressed: _copyResult,
+                  icon: const Icon(Icons.copy_rounded, color: mint),
                 ),
                 if (speaking)
                   const SizedBox(
                     width: 16,
                     height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: mint),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: mint,
+                    ),
                   ),
               ],
             ),
