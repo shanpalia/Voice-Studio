@@ -576,17 +576,31 @@ class _HomePageState extends State<HomePage> {
       final wavFile = File('${directory.path}/voice_studio_$stamp.wav');
       final mp3File = File('${directory.path}/$cleanName.mp3');
 
-      await tts.synthesizeToFile(text, wavFile.path, true);
-      final wavExists = await wavFile.exists();
-      final wavSize = wavExists ? await wavFile.length() : 0;
-      if (!wavExists || wavSize == 0) {
+      final synthResult = await tts.synthesizeToFile(
+        text,
+        wavFile.path,
+        true,
+      );
+
+      if (synthResult is num && synthResult != 0) {
+        throw Exception('TTS synthesizeToFile returned status $synthResult.');
+      }
+
+      var wavExists = await wavFile.exists();
+      var wavSize = wavExists ? await wavFile.length() : 0;
+
+      // Some Android TTS engines return before the file is visible.
+      for (var i = 0; i < 40 && (!wavExists || wavSize < 44); i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 250));
+        wavExists = await wavFile.exists();
+        wavSize = wavExists ? await wavFile.length() : 0;
+      }
+
+      if (!wavExists || wavSize < 44) {
         if (wavExists) await wavFile.delete();
-        if (mounted) {
-          _showMessage(
-            'Audio could not be generated. Please check that the selected voice is installed.',
-          );
-        }
-        return;
+        throw Exception(
+          'TTS did not create a valid WAV file (size: $wavSize bytes).',
+        );
       }
 
       await _encodeWavToMp3(wavFile, mp3File);
@@ -649,11 +663,10 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       );
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        _showMessage(
-          'MP3 audio could not be generated. Please check your device TTS voice.',
-        );
+        final message = error.toString().replaceFirst('Exception: ', '');
+        _showMessage('MP3 generation failed: $message');
       }
     }
   }
@@ -710,14 +723,15 @@ class _HomePageState extends State<HomePage> {
         sampleRate <= 0) {
       throw const FormatException('Could not read the generated WAV format.');
     }
-    if (bitsPerSample != 16) {
+    if (![8, 16, 24, 32].contains(bitsPerSample)) {
       throw FormatException(
-        'The installed TTS engine produced $bitsPerSample-bit WAV audio. '
-        'Please try another device voice.',
+        'The installed TTS engine produced unsupported PCM depth: '
+        '$bitsPerSample-bit WAV.',
       );
     }
 
-    final bytesPerFrame = channels * 2;
+    final bytesPerSample = bitsPerSample ~/ 8;
+    final bytesPerFrame = channels * bytesPerSample;
     final frameCount = dataLength ~/ bytesPerFrame;
     if (frameCount == 0) {
       throw const FormatException('Generated WAV contains no audio samples.');
@@ -727,11 +741,33 @@ class _HomePageState extends State<HomePage> {
     Float64List? right;
     if (channels > 1) right = Float64List(frameCount);
 
+    double readSample(int position) {
+      switch (bitsPerSample) {
+        case 8:
+          return (data.getUint8(position) - 128) / 128.0;
+        case 16:
+          return data.getInt16(position, Endian.little) / 32768.0;
+        case 24:
+          final b0 = data.getUint8(position);
+          final b1 = data.getUint8(position + 1);
+          final b2 = data.getUint8(position + 2);
+          var value = b0 | (b1 << 8) | (b2 << 16);
+          if ((value & 0x800000) != 0) value -= 0x1000000;
+          return value / 8388608.0;
+        case 32:
+          return data.getInt32(position, Endian.little) / 2147483648.0;
+        default:
+          throw StateError('Unsupported PCM depth.');
+      }
+    }
+
     var cursor = dataOffset;
     for (var i = 0; i < frameCount; i++) {
-      left[i] = data.getInt16(cursor, Endian.little) / 32768.0;
+      left[i] = readSample(cursor).clamp(-1.0, 1.0).toDouble();
       if (right != null) {
-        right[i] = data.getInt16(cursor + 2, Endian.little) / 32768.0;
+        right[i] = readSample(cursor + bytesPerSample)
+            .clamp(-1.0, 1.0)
+            .toDouble();
       }
       cursor += bytesPerFrame;
     }
