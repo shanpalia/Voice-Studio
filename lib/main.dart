@@ -7,7 +7,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:flutter_lame_update/flutter_lame_update.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -912,32 +911,30 @@ class _HomePageState extends State<HomePage> {
     await tts.setVolume(1.0);
 
     final directory = await getApplicationDocumentsDirectory();
-    final stamp = DateTime.now().millisecondsSinceEpoch;
-    final wavFile = File('${directory.path}/voice_studio_$stamp.wav');
-    final mp3File = File('${directory.path}/$cleanName.mp3');
+    final mp3File = File(
+      '${directory.path}/$cleanName.mp3',
+    );
 
     try {
-      onStatus('Generating WAV audio…');
-      await tts.synthesizeToFile(text, wavFile.path, true);
+      onStatus('Generating MP3 audio…');
+      await tts.synthesizeToFile(
+        text,
+        mp3File.path,
+        true,
+      );
 
-      var wavExists = await wavFile.exists();
-      var wavSize = wavExists ? await wavFile.length() : 0;
-      for (var i = 0; i < 40 && (!wavExists || wavSize < 44); i++) {
+      var exists = await mp3File.exists();
+      var size = exists ? await mp3File.length() : 0;
+      for (var i = 0; i < 40 && (!exists || size < 256); i++) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
-        wavExists = await wavFile.exists();
-        wavSize = wavExists ? await wavFile.length() : 0;
+        exists = await mp3File.exists();
+        size = exists ? await mp3File.length() : 0;
       }
 
-      if (!wavExists || wavSize < 44) {
+      if (!exists || size < 256) {
         throw Exception(
-          'TTS did not create a valid WAV file (size: $wavSize bytes).',
+          'TTS did not create a valid MP3 file (size: $size bytes).',
         );
-      }
-
-      onStatus('Converting WAV to MP3…');
-      await _encodeWavToMp3(wavFile, mp3File);
-      if (!await mp3File.exists() || await mp3File.length() == 0) {
-        throw Exception('MP3 audio could not be created.');
       }
 
       onStatus('Saving MP3 to Downloads…');
@@ -954,133 +951,12 @@ class _HomePageState extends State<HomePage> {
       if (savedUri == null || savedUri.isEmpty) {
         throw Exception('Download failed');
       }
+
       onStatus('Download complete');
     } finally {
-      await wavFile.delete().catchError((_) => wavFile);
-      await mp3File.delete().catchError((_) => mp3File);
-    }
-  }
-  Future<void> _encodeWavToMp3(File wavFile, File mp3File) async {
-    final bytes = await wavFile.readAsBytes();
-    if (bytes.length < 44) {
-      throw const FormatException('Generated WAV file is too small.');
-    }
-
-    final data = ByteData.sublistView(bytes);
-    if (data.getUint32(0, Endian.little) != 0x52494646 ||
-        data.getUint32(8, Endian.little) != 0x57415645) {
-      throw const FormatException('Generated audio is not a valid WAV file.');
-    }
-
-    int? sampleRate;
-    int? channels;
-    int? bitsPerSample;
-    int? dataOffset;
-    int? dataLength;
-    var offset = 12;
-
-    while (offset + 8 <= bytes.length) {
-      final chunkId = data.getUint32(offset, Endian.little);
-      final chunkSize = data.getUint32(offset + 4, Endian.little);
-      final chunkData = offset + 8;
-      if (chunkData > bytes.length) break;
-      final safeSize = math.min(chunkSize, bytes.length - chunkData);
-
-      if (chunkId == 0x666d7420 && safeSize >= 16) {
-        final audioFormat = data.getUint16(chunkData, Endian.little);
-        if (audioFormat != 1) {
-          throw const FormatException('Only PCM WAV audio is supported.');
-        }
-        channels = data.getUint16(chunkData + 2, Endian.little);
-        sampleRate = data.getUint32(chunkData + 4, Endian.little);
-        bitsPerSample = data.getUint16(chunkData + 14, Endian.little);
-      } else if (chunkId == 0x64617461) {
-        dataOffset = chunkData;
-        dataLength = safeSize;
+      if (await mp3File.exists()) {
+        await mp3File.delete();
       }
-
-      offset = chunkData + chunkSize + (chunkSize.isOdd ? 1 : 0);
-      if (offset > bytes.length) break;
-    }
-
-    if (sampleRate == null ||
-        channels == null ||
-        bitsPerSample == null ||
-        dataOffset == null ||
-        dataLength == null ||
-        channels < 1 ||
-        sampleRate <= 0) {
-      throw const FormatException('Could not read the generated WAV format.');
-    }
-    if (![8, 16, 24, 32].contains(bitsPerSample)) {
-      throw FormatException(
-        'The installed TTS engine produced unsupported PCM depth: '
-        '$bitsPerSample-bit WAV.',
-      );
-    }
-
-    final bytesPerSample = bitsPerSample ~/ 8;
-    final bytesPerFrame = channels * bytesPerSample;
-    final frameCount = dataLength ~/ bytesPerFrame;
-    if (frameCount == 0) {
-      throw const FormatException('Generated WAV contains no audio samples.');
-    }
-
-    final left = Float64List(frameCount);
-    Float64List? right;
-    if (channels > 1) right = Float64List(frameCount);
-
-    double readSample(int position) {
-      switch (bitsPerSample) {
-        case 8:
-          return (data.getUint8(position) - 128) / 128.0;
-        case 16:
-          return data.getInt16(position, Endian.little) / 32768.0;
-        case 24:
-          final b0 = data.getUint8(position);
-          final b1 = data.getUint8(position + 1);
-          final b2 = data.getUint8(position + 2);
-          var value = b0 | (b1 << 8) | (b2 << 16);
-          if ((value & 0x800000) != 0) value -= 0x1000000;
-          return value / 8388608.0;
-        case 32:
-          return data.getInt32(position, Endian.little) / 2147483648.0;
-        default:
-          throw StateError('Unsupported PCM depth.');
-      }
-    }
-
-    var cursor = dataOffset;
-    for (var i = 0; i < frameCount; i++) {
-      left[i] = readSample(cursor).clamp(-1.0, 1.0).toDouble();
-      if (right != null) {
-        right[i] = readSample(cursor + bytesPerSample)
-            .clamp(-1.0, 1.0)
-            .toDouble();
-      }
-      cursor += bytesPerFrame;
-    }
-
-    final encoder = LameMp3Encoder(
-      sampleRate: sampleRate,
-      numChannels: channels > 1 ? 2 : 1,
-    );
-    final sink = mp3File.openWrite();
-
-    try {
-      final chunkSize = sampleRate;
-      for (var start = 0; start < frameCount; start += chunkSize) {
-        final end = math.min(start + chunkSize, frameCount);
-        final mp3Frame = await encoder.encodeDouble(
-          leftChannel: left.sublist(start, end),
-          rightChannel: right?.sublist(start, end),
-        );
-        sink.add(mp3Frame);
-      }
-      sink.add(await encoder.flush());
-    } finally {
-      await sink.close();
-      encoder.close();
     }
   }
 
