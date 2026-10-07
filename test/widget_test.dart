@@ -7,7 +7,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Voice Studio'), findsWidgets);
-    expect(find.text('Your voice,\nyour language.'), findsOneWidget);
+    expect(find.text('Voice Studio\nby PaliaAPK HUB'), findsOneWidget);
     expect(find.text('Translate'), findsWidgets);
     expect(find.text('Settings'), findsOneWidget);
   });
