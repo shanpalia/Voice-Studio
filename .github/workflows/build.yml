@@ -147,34 +147,6 @@ jobs:
         with:
           name: voice-studio-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-,
-          ]
-          patched = text
-          total = 0
-          for pattern in patterns:
-              patched, count = re.subn(pattern, '', patched, flags=re.MULTILINE)
-              total += count
-
-          if total:
-              gradle.write_text(patched)
-              print(f"Removed {total} legacy CMake DSL line(s) from {gradle}")
-          else:
-              print(f"No legacy CMake DSL lines found in {gradle}; continuing.")
-          PY
-
-      - name: Generate launcher icons
-        run: dart run flutter_launcher_icons
-
-      - name: Generate native splash screen
-        run: dart run flutter_native_splash:create
-
-      - name: Analyze
-        run: flutter analyze
-
-      - name: Test
-        run: flutter test
-
-      - name: Build release APK
         run: flutter build apk --release
 
       - name: Upload APK
