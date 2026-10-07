@@ -154,17 +154,26 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import re
 
           gradle = next(Path.home().glob('.pub-cache/hosted/pub.dev/flutter_lame_update-*/android/build.gradle'))
-          text = gradle.read_text()
+          lines = gradle.read_text().splitlines(True)
 
-          # flutter_lame_update 1.1.0 uses the legacy CMake arguments DSL.
-          # Modern AGP no longer exposes that DSL on CmakeOptions. These two
-          # values are defaults for current Android/NDK builds, so remove the
-          # obsolete line instead of calling the removed API.
-          patterns = [
-              r'^\s*arguments\s*["\']-DANDROID_ARM_NEON=TRUE["\']\s*,\s*["\']-DANDROID_STL=c\+\+_shared["\']\s*
+          kept = []
+          removed = []
+          for line in lines:
+              stripped = line.strip()
+              if 'ANDROID_ARM_NEON=TRUE' in stripped and 'ANDROID_STL=c++_shared' in stripped:
+                  removed.append(stripped)
+                  continue
+              if 'mp3lame-arm64-v8a' in stripped and 'mp3lame-x86_64' in stripped and 'targets' in stripped:
+                  removed.append(stripped)
+                  continue
+              kept.append(line)
+
+          gradle.write_text(''.join(kept))
+          print(f'Patched {gradle}; removed {len(removed)} legacy CMake line(s)')
+          for line in removed:
+              print(f'  removed: {line}')
           PY
 
       - name: Generate launcher icons
