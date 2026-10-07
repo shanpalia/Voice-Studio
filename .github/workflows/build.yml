@@ -25,7 +25,7 @@ jobs:
           sudo apt-get install -y librsvg2-bin
           mkdir -p assets
           rsvg-convert -w 1024 -h 1024 assets/voice_studio_icon.svg -o assets/voice_studio_icon.png
-          rsvg-convert -w 1600 -h 900 assets/voice_studio_splash.svg -o assets/voice_studio_splash.png
+          rsvg-convert -w 900 -h 1600 assets/voice_studio_splash.svg -o assets/voice_studio_splash.png
 
       - name: Configure Android permissions and speech recognition
         run: |
