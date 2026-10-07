@@ -923,6 +923,7 @@ class _HomePageState extends State<HomePage> {
       _showMessage('Please enter a valid file name.');
       return;
     }
+    if (!mounted) return;
 
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
