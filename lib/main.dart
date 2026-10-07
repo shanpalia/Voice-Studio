@@ -4,7 +4,6 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
@@ -444,6 +443,57 @@ class _HomePageState extends State<HomePage> {
       _showMessage('Enter or translate text before creating audio.');
       return;
     }
+
+    final nameController = TextEditingController(
+      text: 'Voice_Studio_\${DateTime.now().millisecondsSinceEpoch}',
+    );
+
+    final fileName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Name your MP3'),
+        content: TextField(
+          controller: nameController,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(
+            labelText: 'File name',
+            hintText: 'Enter MP3 file name',
+            suffixText: '.mp3',
+          ),
+          onSubmitted: (_) {
+            final value = nameController.text.trim();
+            if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              final value = nameController.text.trim();
+              if (value.isNotEmpty) Navigator.pop(dialogContext, value);
+            },
+            icon: const Icon(Icons.download_rounded),
+            label: const Text('Download'),
+          ),
+        ],
+      ),
+    );
+    nameController.dispose();
+
+    if (fileName == null || fileName.trim().isEmpty) return;
+
+    final cleanName = fileName.trim()
+        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
+        .replaceAll(RegExp(r'\.mp3$', caseSensitive: false), '');
+    if (cleanName.isEmpty) {
+      _showMessage('Please enter a valid file name.');
+      return;
+    }
+
     try {
       await tts.stop();
       await tts.awaitSynthCompletion(true);
@@ -455,20 +505,24 @@ class _HomePageState extends State<HomePage> {
 
       final directory = await getApplicationDocumentsDirectory();
       final stamp = DateTime.now().millisecondsSinceEpoch;
-      final wavFile = File('${directory.path}/voice_studio_$stamp.wav');
-      final mp3File = File('${directory.path}/voice_studio_$stamp.mp3');
+      final wavFile = File('\${directory.path}/voice_studio_\${stamp}.wav');
+      final mp3File = File('\${directory.path}/\${cleanName}.mp3');
 
       await tts.synthesizeToFile(text, wavFile.path, true);
       final wavExists = await wavFile.exists();
       final wavSize = wavExists ? await wavFile.length() : 0;
       if (!wavExists || wavSize == 0) {
         if (wavExists) await wavFile.delete();
-        if (mounted) _showMessage('Audio could not be generated. Please check that the selected voice is installed.');
+        if (mounted) {
+          _showMessage(
+            'Audio could not be generated. Please check that the selected voice is installed.',
+          );
+        }
         return;
       }
 
       final session = await FFmpegKit.execute(
-        '-y -i "${wavFile.path}" -vn -codec:a libmp3lame -b:a 128k "${mp3File.path}"',
+        '-y -i "\${wavFile.path}" -vn -codec:a libmp3lame -b:a 128k "\${mp3File.path}"',
       );
       final returnCode = await session.getReturnCode();
       if (!ReturnCode.isSuccess(returnCode) ||
@@ -480,24 +534,31 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      final savedUri = await const MethodChannel('voice_studio/download').invokeMethod<String>(
+      final savedUri = await const MethodChannel(
+        'voice_studio/download',
+      ).invokeMethod<String>(
         'saveToDownloads',
         <String, dynamic>{
           'sourcePath': mp3File.path,
-          'fileName': mp3File.uri.pathSegments.last,
+          'fileName': '\${cleanName}.mp3',
         },
       );
+
       await wavFile.delete().catchError((_) => wavFile);
       await mp3File.delete().catchError((_) => mp3File);
 
-      if (savedUri == null || savedUri.isEmpty) throw Exception('Download failed');
+      if (savedUri == null || savedUri.isEmpty) {
+        throw Exception('Download failed');
+      }
       if (!mounted) return;
 
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: const Text('Download complete'),
-          content: const Text('Your MP3 audio has been downloaded to Downloads/Voice Studio.'),
+          content: Text(
+            '"\${cleanName}.mp3" downloaded to Downloads/Voice Studio.',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
@@ -507,12 +568,16 @@ class _HomePageState extends State<HomePage> {
               onPressed: () async {
                 Navigator.pop(dialogContext);
                 try {
-                  await const MethodChannel('voice_studio/download').invokeMethod<void>(
+                  await const MethodChannel(
+                    'voice_studio/download',
+                  ).invokeMethod<void>(
                     'openDownloadedFile',
                     <String, dynamic>{'uri': savedUri},
                   );
                 } catch (_) {
-                  if (mounted) _showMessage('No app is available to open this MP3 file.');
+                  if (mounted) {
+                    _showMessage('No app is available to open this MP3 file.');
+                  }
                 }
               },
               icon: const Icon(Icons.open_in_new_rounded),
@@ -522,7 +587,11 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     } catch (_) {
-      if (mounted) _showMessage('MP3 audio could not be generated. Please check your device TTS voice.');
+      if (mounted) {
+        _showMessage(
+          'MP3 audio could not be generated. Please check your device TTS voice.',
+        );
+      }
     }
   }
 
