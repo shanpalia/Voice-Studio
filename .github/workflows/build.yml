@@ -48,6 +48,9 @@ jobs:
               <intent>
                 <action android:name="android.speech.RecognitionService"/>
               </intent>
+              <intent>
+                <action android:name="android.intent.action.TTS_SERVICE"/>
+              </intent>
             </queries>''')
           s = s.replace('android:label="voice_studio"', 'android:label="Voice Studio"')
           p.write_text(s)
