@@ -599,15 +599,7 @@ class _HomePageState extends State<HomePage> {
           titleSpacing: 20,
           title: Row(
             children: [
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  color: mint,
-                  borderRadius: BorderRadius.circular(13),
-                ),
-                child: const Icon(Icons.mic_rounded, color: Colors.white, size: 24),
-              ),
+              _appIcon(42, 13),
               const SizedBox(width: 12),
               const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -742,15 +734,7 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
-            Container(
-              width: 74,
-              height: 74,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: .12),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(Icons.graphic_eq_rounded, color: mint, size: 40),
-            ),
+            _appIcon(78, 22),
           ],
         ),
       );
@@ -1229,14 +1213,30 @@ class _HomePageState extends State<HomePage> {
         },
       );
 
+  Widget _appIcon(double size, double radius) => ClipRRect(
+        borderRadius: BorderRadius.circular(radius),
+        child: Image.asset(
+          'assets/voice_studio_icon.png',
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+        ),
+      );
+
   Widget _branding() => Container(
         padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
         decoration: BoxDecoration(
           color: dark,
           borderRadius: BorderRadius.circular(22),
         ),
-        child: const Column(
-        children: [
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _appIcon(52, 15),
+            const SizedBox(width: 14),
+            const Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
           Text(
             'PALIAAPK HUB',
             style: TextStyle(color: mint, fontWeight: FontWeight.w800),
@@ -1245,7 +1245,9 @@ class _HomePageState extends State<HomePage> {
           Text('Voice Studio', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
           SizedBox(height: 4),
           Text('Developer by shanpalia', style: TextStyle(color: Colors.white70, fontSize: 12)),
-        ],
-      ),
-    );
+              ],
+            ),
+          ],
+        ),
+      );
 }
