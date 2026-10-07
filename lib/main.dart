@@ -713,8 +713,7 @@ class _HomePageState extends State<HomePage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Your voice,
-your language.',
+                    'Voice Studio\nby PaliaAPK HUB',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 25,
@@ -940,7 +939,6 @@ your language.',
       );
 
   Widget _voiceSelector() {
-    final selected = _selectedVoice();
     return DropdownButtonFormField<String>(
       initialValue: availableVoices.any((v) => '${v['name']}|${v['locale']}' == selectedVoiceKey)
           ? selectedVoiceKey
@@ -1232,5 +1230,7 @@ your language.',
           SizedBox(height: 4),
           Text('Developer by shanpalia', style: TextStyle(color: Colors.white70, fontSize: 12)),
         ],
-      );
+      ),
+    );
+  }
 }
