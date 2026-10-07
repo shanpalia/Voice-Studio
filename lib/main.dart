@@ -4,7 +4,10 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -441,7 +444,6 @@ class _HomePageState extends State<HomePage> {
       _showMessage('Enter or translate text before creating audio.');
       return;
     }
-
     try {
       await tts.stop();
       await tts.awaitSynthCompletion(true);
@@ -452,56 +454,75 @@ class _HomePageState extends State<HomePage> {
       await tts.setVolume(1.0);
 
       final directory = await getApplicationDocumentsDirectory();
-      final file = File(
-        '${directory.path}/voice_studio_${DateTime.now().millisecondsSinceEpoch}.wav',
-      );
+      final stamp = DateTime.now().millisecondsSinceEpoch;
+      final wavFile = File('${directory.path}/voice_studio_$stamp.wav');
+      final mp3File = File('${directory.path}/voice_studio_$stamp.mp3');
 
-      // Wait for Android TTS to finish writing the file before sharing it.
-      await tts.synthesizeToFile(text, file.path, true);
-      final exists = await file.exists();
-      final size = exists ? await file.length() : 0;
-
-      if (!exists || size == 0) {
-        if (exists) {
-          await file.delete();
-        }
-        if (mounted) {
-          _showMessage(
-            'Audio could not be generated. Please check that the selected voice is installed.',
-          );
-        }
+      await tts.synthesizeToFile(text, wavFile.path, true);
+      final wavExists = await wavFile.exists();
+      final wavSize = wavExists ? await wavFile.length() : 0;
+      if (!wavExists || wavSize == 0) {
+        if (wavExists) await wavFile.delete();
+        if (mounted) _showMessage('Audio could not be generated. Please check that the selected voice is installed.');
         return;
       }
 
-      if (!mounted) return;
+      final session = await FFmpegKit.execute(
+        '-y -i "${wavFile.path}" -vn -codec:a libmp3lame -b:a 128k "${mp3File.path}"',
+      );
+      final returnCode = await session.getReturnCode();
+      if (!ReturnCode.isSuccess(returnCode) ||
+          !await mp3File.exists() ||
+          await mp3File.length() == 0) {
+        await wavFile.delete().catchError((_) => wavFile);
+        await mp3File.delete().catchError((_) => mp3File);
+        if (mounted) _showMessage('MP3 audio could not be created. Please try again.');
+        return;
+      }
 
-      // Save directly to Android's public Downloads folder.
-      // This uses MediaStore, so Android does not show a "Save as" dialog.
-      final savedUri = await const MethodChannel(
-        'voice_studio/download',
-      ).invokeMethod<String>(
+      final savedUri = await const MethodChannel('voice_studio/download').invokeMethod<String>(
         'saveToDownloads',
         <String, dynamic>{
-          'sourcePath': file.path,
-          'fileName': file.uri.pathSegments.last,
+          'sourcePath': mp3File.path,
+          'fileName': mp3File.uri.pathSegments.last,
         },
       );
+      await wavFile.delete().catchError((_) => wavFile);
+      await mp3File.delete().catchError((_) => mp3File);
 
-      await file.delete().catchError((_) => file);
+      if (savedUri == null || savedUri.isEmpty) throw Exception('Download failed');
+      if (!mounted) return;
 
-      if (savedUri == null || savedUri.isEmpty) {
-        throw Exception('Download failed');
-      }
-
-      if (mounted) {
-        _showMessage('Audio downloaded to Downloads/Voice Studio.');
-      }
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Download complete'),
+          content: const Text('Your MP3 audio has been downloaded to Downloads/Voice Studio.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Close'),
+            ),
+            FilledButton.icon(
+              onPressed: () async {
+                Navigator.pop(dialogContext);
+                try {
+                  await const MethodChannel('voice_studio/download').invokeMethod<void>(
+                    'openDownloadedFile',
+                    <String, dynamic>{'uri': savedUri},
+                  );
+                } catch (_) {
+                  if (mounted) _showMessage('No app is available to open this MP3 file.');
+                }
+              },
+              icon: const Icon(Icons.open_in_new_rounded),
+              label: const Text('Open'),
+            ),
+          ],
+        ),
+      );
     } catch (_) {
-      if (mounted) {
-        _showMessage(
-          'Audio could not be generated. Please check your device TTS voice.',
-        );
-      }
+      if (mounted) _showMessage('MP3 audio could not be generated. Please check your device TTS voice.');
     }
   }
 
