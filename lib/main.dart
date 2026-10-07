@@ -802,8 +802,7 @@ class _HomePageState extends State<HomePage> {
     required String text,
     required ValueChanged<String> onStatus,
   }) async {
-    final cleanName = 'Voice_Studio_' +
-        DateTime.now().millisecondsSinceEpoch.toString();
+    final cleanName = 'Voice_Studio_\${DateTime.now().millisecondsSinceEpoch}';
 
     onStatus('Preparing voice…');
     await tts.stop();
@@ -816,8 +815,8 @@ class _HomePageState extends State<HomePage> {
 
     final directory = await getApplicationDocumentsDirectory();
     final stamp = DateTime.now().millisecondsSinceEpoch;
-    final wavFile = File(directory.path + '/voice_studio_' + stamp.toString() + '.wav');
-    final mp3File = File(directory.path + '/' + cleanName + '.mp3');
+    final wavFile = File('\${directory.path}/voice_studio_\$stamp.wav');
+    final mp3File = File('\${directory.path}/\$cleanName.mp3');
 
     try {
       onStatus('Generating WAV audio…');
@@ -833,7 +832,7 @@ class _HomePageState extends State<HomePage> {
 
       if (!wavExists || wavSize < 44) {
         throw Exception(
-          'TTS did not create a valid WAV file (size: ' + wavSize.toString() + ' bytes).',
+          'TTS did not create a valid WAV file (size: \$wavSize bytes).',
         );
       }
 
@@ -850,7 +849,7 @@ class _HomePageState extends State<HomePage> {
         'saveToDownloads',
         <String, dynamic>{
           'sourcePath': mp3File.path,
-          'fileName': cleanName + '.mp3',
+          'fileName': '\$cleanName.mp3',
         },
       );
 
