@@ -639,8 +639,8 @@ class _HomePageState extends State<HomePage> {
         bitsPerSample == null ||
         dataOffset == null ||
         dataLength == null ||
-        channels! < 1 ||
-        sampleRate! <= 0) {
+        channels < 1 ||
+        sampleRate <= 0) {
       throw const FormatException('Could not read the generated WAV format.');
     }
     if (bitsPerSample != 16) {
@@ -650,17 +650,17 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    final bytesPerFrame = channels! * 2;
-    final frameCount = dataLength! ~/ bytesPerFrame;
+    final bytesPerFrame = channels * 2;
+    final frameCount = dataLength ~/ bytesPerFrame;
     if (frameCount == 0) {
       throw const FormatException('Generated WAV contains no audio samples.');
     }
 
     final left = Float64List(frameCount);
     Float64List? right;
-    if (channels! > 1) right = Float64List(frameCount);
+    if (channels > 1) right = Float64List(frameCount);
 
-    var cursor = dataOffset!;
+    var cursor = dataOffset;
     for (var i = 0; i < frameCount; i++) {
       left[i] = data.getInt16(cursor, Endian.little) / 32768.0;
       if (right != null) {
@@ -670,13 +670,13 @@ class _HomePageState extends State<HomePage> {
     }
 
     final encoder = LameMp3Encoder(
-      sampleRate: sampleRate!,
-      numChannels: channels! > 1 ? 2 : 1,
+      sampleRate: sampleRate,
+      numChannels: channels > 1 ? 2 : 1,
     );
     final sink = mp3File.openWrite();
 
     try {
-      final chunkSize = sampleRate!;
+      final chunkSize = sampleRate;
       for (var start = 0; start < frameCount; start += chunkSize) {
         final end = math.min(start + chunkSize, frameCount);
         final mp3Frame = await encoder.encodeDouble(
