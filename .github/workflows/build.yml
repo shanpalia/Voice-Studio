@@ -150,6 +150,25 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Patch LAME CMake options for current Android Gradle Plugin
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          gradle = next(Path.home().glob('.pub-cache/hosted/pub.dev/flutter_lame_update-*/android/build.gradle'))
+          text = gradle.read_text()
+          patched = re.sub(
+              r'arguments\\s*\\(\\s*"(-DANDROID_ARM_NEON=TRUE)"\\s*,\\s*"(-DANDROID_STL=c\\+\\+_shared)"\\s*\\)',
+              r'arguments.addAll(["\\1", "\\2"])',
+              text,
+          )
+          if patched == text:
+              raise SystemExit(f'Could not find incompatible CMake arguments() syntax in {gradle}')
+          gradle.write_text(patched)
+          print(f'Patched {gradle}')
+          PY
+
       - name: Generate launcher icons
         run: dart run flutter_launcher_icons
 
