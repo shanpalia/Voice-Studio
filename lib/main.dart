@@ -43,6 +43,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
   bool processing = false;
   String processStatus = 'Preparing download…';
   String? processError;
+  double downloadProgress = 0.0;
 
   @override
   void initState() {
@@ -60,25 +61,46 @@ class _DownloadsPageState extends State<DownloadsPage> {
         processing = true;
         processError = null;
         processStatus = 'Preparing download…';
+        downloadProgress = 0.05;
       });
     }
 
     try {
       await widget.startDownload!((status) {
-        if (mounted) setState(() => processStatus = status);
+        if (!mounted) return;
+        var progress = downloadProgress;
+        if (status.contains('Preparing')) {
+          progress = 0.05;
+        } else if (status.contains('Generating WAV')) {
+          progress = 0.25;
+        } else if (status.contains('Converting WAV')) {
+          progress = 0.60;
+        } else if (status.contains('Saving MP3')) {
+          progress = 0.88;
+        } else if (status.contains('complete')) {
+          progress = 1.0;
+        }
+        setState(() {
+          processStatus = status;
+          downloadProgress = progress;
+        });
       });
       await _loadFiles();
       if (mounted) {
         setState(() {
           processing = false;
           processStatus = 'Download complete';
+          downloadProgress = 1.0;
         });
       }
     } catch (error) {
       if (mounted) {
         setState(() {
           processing = false;
-          processError = error.toString().replaceFirst('Exception: ', '');
+          processError = error
+              .toString()
+              .replaceFirst('FormatException: ', '')
+              .replaceFirst('Exception: ', '');
           processStatus = 'Download failed';
         });
       }
@@ -291,6 +313,78 @@ class _DownloadsPageState extends State<DownloadsPage> {
                           ),
                         ),
                     ],
+                  ),
+                ),
+              ),
+            ),
+          if (processing)
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 18,
+              child: SafeArea(
+                top: false,
+                child: Material(
+                  elevation: 10,
+                  borderRadius: BorderRadius.circular(18),
+                  color: Colors.white,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(16, 13, 16, 14),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFFE5EEE9)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.downloading_rounded,
+                              color: mint,
+                              size: 21,
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Download remaining',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: dark,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              '${(downloadProgress * 100).round()}%',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: mint,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: downloadProgress,
+                            minHeight: 7,
+                            backgroundColor: const Color(0xFFE6F8F2),
+                            color: mint,
+                          ),
+                        ),
+                        const SizedBox(height: 7),
+                        Text(
+                          processStatus,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.black54,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
