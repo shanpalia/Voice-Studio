@@ -782,6 +782,15 @@ class _HomePageState extends State<HomePage> {
       }
       if (!mounted) return;
 
+      // Open the Downloaded Files page immediately so the newly created MP3
+      // is visible there after the save completes.
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const DownloadsPage(),
+        ),
+      );
+      if (!mounted) return;
+
       await showDialog<void>(
         context: context,
         builder: (dialogContext) => AlertDialog(
