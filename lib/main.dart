@@ -1,12 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:ffmpeg_kit_flutter_new_audio/ffmpeg_kit.dart';
-import 'package:ffmpeg_kit_flutter_new_audio/return_code.dart';
+import 'package:flutter_lame_update/flutter_lame_update.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -521,13 +522,8 @@ class _HomePageState extends State<HomePage> {
         return;
       }
 
-      final session = await FFmpegKit.execute(
-        '-y -i "${wavFile.path}" -vn -codec:a libmp3lame -b:a 128k "${mp3File.path}"',
-      );
-      final returnCode = await session.getReturnCode();
-      if (!ReturnCode.isSuccess(returnCode) ||
-          !await mp3File.exists() ||
-          await mp3File.length() == 0) {
+      await _encodeWavToMp3(wavFile, mp3File);
+      if (!await mp3File.exists() || await mp3File.length() == 0) {
         await wavFile.delete().catchError((_) => wavFile);
         await mp3File.delete().catchError((_) => mp3File);
         if (mounted) _showMessage('MP3 audio could not be created. Please try again.');
@@ -592,6 +588,107 @@ class _HomePageState extends State<HomePage> {
           'MP3 audio could not be generated. Please check your device TTS voice.',
         );
       }
+    }
+  }
+
+  Future<void> _encodeWavToMp3(File wavFile, File mp3File) async {
+    final bytes = await wavFile.readAsBytes();
+    if (bytes.length < 44) {
+      throw const FormatException('Generated WAV file is too small.');
+    }
+
+    final data = ByteData.sublistView(bytes);
+    if (data.getUint32(0, Endian.little) != 0x52494646 ||
+        data.getUint32(8, Endian.little) != 0x57415645) {
+      throw const FormatException('Generated audio is not a valid WAV file.');
+    }
+
+    int? sampleRate;
+    int? channels;
+    int? bitsPerSample;
+    int? dataOffset;
+    int? dataLength;
+    var offset = 12;
+
+    while (offset + 8 <= bytes.length) {
+      final chunkId = data.getUint32(offset, Endian.little);
+      final chunkSize = data.getUint32(offset + 4, Endian.little);
+      final chunkData = offset + 8;
+      if (chunkData > bytes.length) break;
+      final safeSize = math.min(chunkSize, bytes.length - chunkData);
+
+      if (chunkId == 0x666d7420 && safeSize >= 16) {
+        final audioFormat = data.getUint16(chunkData, Endian.little);
+        if (audioFormat != 1) {
+          throw const FormatException('Only PCM WAV audio is supported.');
+        }
+        channels = data.getUint16(chunkData + 2, Endian.little);
+        sampleRate = data.getUint32(chunkData + 4, Endian.little);
+        bitsPerSample = data.getUint16(chunkData + 14, Endian.little);
+      } else if (chunkId == 0x64617461) {
+        dataOffset = chunkData;
+        dataLength = safeSize;
+      }
+
+      offset = chunkData + chunkSize + (chunkSize.isOdd ? 1 : 0);
+      if (offset > bytes.length) break;
+    }
+
+    if (sampleRate == null ||
+        channels == null ||
+        bitsPerSample == null ||
+        dataOffset == null ||
+        dataLength == null ||
+        channels! < 1 ||
+        sampleRate! <= 0) {
+      throw const FormatException('Could not read the generated WAV format.');
+    }
+    if (bitsPerSample != 16) {
+      throw FormatException(
+        'The installed TTS engine produced $bitsPerSample-bit WAV audio. '
+        'Please try another device voice.',
+      );
+    }
+
+    final bytesPerFrame = channels! * 2;
+    final frameCount = dataLength! ~/ bytesPerFrame;
+    if (frameCount == 0) {
+      throw const FormatException('Generated WAV contains no audio samples.');
+    }
+
+    final left = Float64List(frameCount);
+    Float64List? right;
+    if (channels! > 1) right = Float64List(frameCount);
+
+    var cursor = dataOffset!;
+    for (var i = 0; i < frameCount; i++) {
+      left[i] = data.getInt16(cursor, Endian.little) / 32768.0;
+      if (right != null) {
+        right[i] = data.getInt16(cursor + 2, Endian.little) / 32768.0;
+      }
+      cursor += bytesPerFrame;
+    }
+
+    final encoder = LameMp3Encoder(
+      sampleRate: sampleRate!,
+      numChannels: channels! > 1 ? 2 : 1,
+    );
+    final sink = mp3File.openWrite();
+
+    try {
+      final chunkSize = sampleRate!;
+      for (var start = 0; start < frameCount; start += chunkSize) {
+        final end = math.min(start + chunkSize, frameCount);
+        final mp3Frame = await encoder.encodeDouble(
+          leftChannel: left.sublist(start, end),
+          rightChannel: right?.sublist(start, end),
+        );
+        sink.add(mp3Frame);
+      }
+      sink.add(await encoder.flush());
+    } finally {
+      await sink.close();
+      encoder.close();
     }
   }
 
