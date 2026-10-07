@@ -489,8 +489,19 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _openStore() async {
     final uri = Uri.parse(appStoreUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    try {
+      final opened = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+        webOnlyWindowName: '_blank',
+      );
+      if (!opened && mounted) {
+        _showMessage('Unable to open PaliaAPK HUB website.');
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Unable to open PaliaAPK HUB website.');
+      }
     }
   }
 
@@ -1073,13 +1084,13 @@ class _HomePageState extends State<HomePage> {
             _settingsCard(
               icon: Icons.grid_view_rounded,
               title: 'More Apps',
-              subtitle: 'Explore PaliaAPK HUB',
+              subtitle: 'Explore apps from PaliaAPK HUB',
               onTap: _openStore,
             ),
             _settingsCard(
-              icon: Icons.language_rounded,
-              title: 'PaliaAPK HUB Website',
-              subtitle: 'shanpalia.github.io/WebsitePaliaAPK_V.2',
+              icon: Icons.public_rounded,
+              title: 'PaliaAPK HUB',
+              subtitle: 'Official website • Apps & Updates',
               onTap: _openStore,
             ),
             _settingsCard(
