@@ -80,7 +80,7 @@ class _HomePageState extends State<HomePage> {
 
     setState(() => listening = true);
     await speech.listen(
-      options: stt.SpeechListenOptions(
+      listenOptions: stt.SpeechListenOptions(
         localeId: from == 'hi' ? 'hi-IN' : 'en-IN',
         partialResults: true,
       ),
