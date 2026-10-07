@@ -80,6 +80,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
           downloadProgress = progress;
         });
       });
+      await Future<void>.delayed(const Duration(milliseconds: 250));
       await _loadFiles();
       if (mounted) {
         setState(() {
@@ -236,7 +237,7 @@ class _DownloadsPageState extends State<DownloadsPage> {
                     },
                   ),
           ),
-          if (processing || processError != null || processStatus == 'Download complete')
+          if (processing || processError != null)
             Positioned(
               left: 14,
               right: 14,
@@ -879,11 +880,56 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
+    final controller = TextEditingController(
+      text: 'Voice_Studio_${DateTime.now().millisecondsSinceEpoch}',
+    );
+    final selectedName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Save MP3'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          decoration: const InputDecoration(
+            labelText: 'File name',
+            hintText: 'Enter MP3 file name',
+            suffixText: '.mp3',
+          ),
+          onSubmitted: (_) => Navigator.of(dialogContext).pop(controller.text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(controller.text),
+            child: const Text('Download'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+
+    if (selectedName == null) return;
+    var cleanName = selectedName.trim();
+    cleanName = cleanName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    cleanName = cleanName.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (cleanName.toLowerCase().endsWith('.mp3')) {
+      cleanName = cleanName.substring(0, cleanName.length - 4).trim();
+    }
+    if (cleanName.isEmpty) {
+      _showMessage('Please enter a valid file name.');
+      return;
+    }
+
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => DownloadsPage(
           startDownload: (onStatus) => _generateAudioFile(
             text: text,
+            fileName: cleanName,
             onStatus: onStatus,
           ),
         ),
@@ -893,9 +939,10 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _generateAudioFile({
     required String text,
+    required String fileName,
     required ValueChanged<String> onStatus,
   }) async {
-    final cleanName = 'Voice_Studio_${DateTime.now().millisecondsSinceEpoch}';
+    final cleanName = fileName;
 
     onStatus('Preparing voice…');
     await tts.stop();
