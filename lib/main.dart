@@ -12,7 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 const mint = Color(0xFF12C9A0);
 const dark = Color(0xFF102A43);
 const page = Color(0xFFF6FBF9);
-const currentVersion = '1.0.0';
+const currentVersion = '1.1.0';
 const appStoreUrl = 'https://shanpalia.github.io/WebsitePaliaAPK_V.2/';
 const versionUrl =
     'https://shanpalia.github.io/WebsitePaliaAPK_V.2/voice-studio/version.json';
@@ -194,7 +194,8 @@ class _HomePageState extends State<HomePage> {
   bool busy = false;
   bool speaking = false;
   int selectedIndex = 0;
-  String activeVoice = 'female';
+  String selectedVoiceKey = '';
+  List<Map<String, String>> availableVoices = [];
   final List<String> history = [];
 
   static const languages = <String, String>{
@@ -230,6 +231,7 @@ class _HomePageState extends State<HomePage> {
     tts.setErrorHandler((_) {
       if (mounted) setState(() => speaking = false);
     });
+    unawaited(_loadVoices());
   }
 
   @override
@@ -330,7 +332,7 @@ class _HomePageState extends State<HomePage> {
       if (input.text.trim().isEmpty) return;
       await _translate();
       if (output.text.trim().isNotEmpty) {
-        await _speak(voice: activeVoice);
+        await _speak();
       }
     } catch (_) {
       if (mounted) _showMessage('Voice-to-voice could not be completed.');
@@ -364,66 +366,72 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _speak({String voice = 'female'}) async {
+  Future<void> _loadVoices() async {
+    try {
+      final raw = await tts.getVoices;
+      if (raw is! List) return;
+      final language = _ttsLocale(to).split('-').first.toLowerCase();
+      final all = raw
+          .whereType<Map>()
+          .map((voice) {
+            final map = <String, String>{};
+            voice.forEach((key, value) {
+              if (value != null) map[key.toString()] = value.toString();
+            });
+            return map;
+          })
+          .where((voice) => (voice['locale'] ?? '').toLowerCase().startsWith(language))
+          .where((voice) => (voice['name'] ?? '').trim().isNotEmpty)
+          .toList();
+      all.sort((a, b) => (a['name'] ?? '').toLowerCase().compareTo((b['name'] ?? '').toLowerCase()));
+      final unique = <String, Map<String, String>>{};
+      for (final voice in all) {
+        unique['${voice['name']}|${voice['locale']}'] = voice;
+      }
+      if (!mounted) return;
+      setState(() {
+        availableVoices = unique.values.toList();
+        if (availableVoices.isNotEmpty &&
+            !availableVoices.any((v) => '${v['name']}|${v['locale']}' == selectedVoiceKey)) {
+          final first = availableVoices.first;
+          selectedVoiceKey = '${first['name']}|${first['locale']}';
+        }
+      });
+    } catch (_) {
+      if (mounted) setState(() => availableVoices = []);
+    }
+  }
+
+  Map<String, String>? _selectedVoice() {
+    for (final voice in availableVoices) {
+      if ('${voice['name']}|${voice['locale']}' == selectedVoiceKey) return voice;
+    }
+    return availableVoices.isEmpty ? null : availableVoices.first;
+  }
+
+  Future<void> _applySelectedVoice() async {
+    final voice = _selectedVoice();
+    if (voice == null) return;
+    final name = voice['name'];
+    final locale = voice['locale'];
+    if (name == null || locale == null) return;
+    await tts.setVoice({'name': name, 'locale': locale});
+  }
+
+  Future<void> _speak() async {
     final text = output.text.trim().isEmpty ? input.text.trim() : output.text.trim();
     if (text.isEmpty) {
       _showMessage('Enter some text first.');
       return;
     }
-
-    final pitch = voice == 'male' ? 0.72 : 1.22;
-    final rate = voice == 'male' ? 0.43 : 0.47;
-    activeVoice = voice;
     await tts.stop();
     await tts.setLanguage(_ttsLocale(to));
-    await _selectSystemVoice(voice, _ttsLocale(to));
-    await tts.setSpeechRate(rate);
-    await tts.setPitch(pitch);
+    await _applySelectedVoice();
+    await tts.setSpeechRate(0.46);
+    await tts.setPitch(1.0);
     await tts.setVolume(1.0);
     if (mounted) setState(() => speaking = true);
     await tts.speak(text);
-  }
-
-  Future<void> _selectSystemVoice(String gender, String locale) async {
-    try {
-      final raw = await tts.getVoices;
-      if (raw is! List) return;
-      final voices = raw
-          .whereType<Map>()
-          .map((voice) => Map<String, dynamic>.from(voice))
-          .where((voice) => (voice['locale'] ?? '')
-              .toString()
-              .toLowerCase()
-              .startsWith(locale.split('-').first.toLowerCase()))
-          .toList();
-
-      if (voices.isEmpty) return;
-
-      final keywords = gender == 'male'
-          ? ['male', 'man', 'david', 'alex', 'daniel', 'george', 'ravi']
-          : ['female', 'woman', 'samantha', 'karen', 'sara', 'zira', 'neerja'];
-
-      Map<String, dynamic>? selected;
-      for (final voice in voices) {
-        final name = (voice['name'] ?? '').toString().toLowerCase();
-        if (keywords.any(name.contains)) {
-          selected = voice;
-          break;
-        }
-      }
-      selected ??= voices.first;
-
-      final clean = <String, String>{};
-      selected.forEach((key, value) {
-        if (value != null) clean[key.toString()] = value.toString();
-      });
-      if (clean.containsKey('name') && clean.containsKey('locale')) {
-        await tts.setVoice(clean);
-      }
-    } catch (_) {
-      // Pitch remains as the reliable fallback when the Android TTS engine
-      // does not expose separate gender-labelled voices.
-    }
   }
 
   Future<void> _downloadAudio() async {
@@ -435,16 +443,17 @@ class _HomePageState extends State<HomePage> {
     try {
       await tts.stop();
       await tts.setLanguage(_ttsLocale(to));
-      await _selectSystemVoice(activeVoice, _ttsLocale(to));
-      await tts.setPitch(activeVoice == 'male' ? 0.72 : 1.22);
+      await _applySelectedVoice();
+      await tts.setSpeechRate(0.46);
+      await tts.setPitch(1.0);
       final directory = await getApplicationDocumentsDirectory();
-      final filePath =
-          '${directory.path}/voice_studio_${DateTime.now().millisecondsSinceEpoch}.wav';
+      final filePath = '${directory.path}/voice_studio_${DateTime.now().millisecondsSinceEpoch}.wav';
       await tts.synthesizeToFile(text, filePath, true);
       if (!mounted) return;
+      final voice = _selectedVoice();
       await SharePlus.instance.share(
         ShareParams(
-          text: 'Voice Studio • ${activeVoice == 'male' ? 'Male' : 'Female'} voice',
+          text: 'Voice Studio • ${voice?['name'] ?? 'Selected voice'}',
           files: [XFile(filePath)],
         ),
       );
@@ -558,6 +567,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _selectTab(int index) => setState(() => selectedIndex = index);
+
+  void _changeOutputLanguage(String value) {
+    setState(() => to = value);
+    unawaited(_loadVoices());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -791,7 +805,7 @@ your language.',
                   padding: EdgeInsets.symmetric(horizontal: 7),
                   child: Icon(Icons.swap_horiz_rounded, color: Colors.black54),
                 ),
-                Expanded(child: _lang(to, (v) => setState(() => to = v))),
+                Expanded(child: _lang(to, _changeOutputLanguage)),
               ],
             ),
             const SizedBox(height: 12),
