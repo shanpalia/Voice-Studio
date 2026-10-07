@@ -23,6 +23,155 @@ const versionUrl =
 
 void main() => runApp(const VoiceStudioApp());
 
+class DownloadsPage extends StatefulWidget {
+  const DownloadsPage({super.key});
+
+  @override
+  State<DownloadsPage> createState() => _DownloadsPageState();
+}
+
+class _DownloadsPageState extends State<DownloadsPage> {
+  static const _channel = MethodChannel('voice_studio/download');
+
+  List<Map<String, dynamic>> files = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFiles();
+  }
+
+  Future<void> _loadFiles() async {
+    setState(() => loading = true);
+    try {
+      final raw = await _channel.invokeMethod<List<dynamic>>('listDownloads');
+      final items = (raw ?? const <dynamic>[])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+      if (mounted) setState(() { files = items; loading = false; });
+    } catch (error) {
+      if (mounted) {
+        setState(() => loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load downloads: $error'), behavior: SnackBarBehavior.floating),
+        );
+      }
+    }
+  }
+
+  Future<void> _play(Map<String, dynamic> file) async {
+    final uri = '${file['uri'] ?? ''}';
+    if (uri.isEmpty) return;
+    try {
+      await _channel.invokeMethod<void>('openDownloadedFile', <String, dynamic>{'uri': uri});
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No app is available to play this MP3.')),
+      );
+    }
+  }
+
+  Future<void> _delete(Map<String, dynamic> file) async {
+    final uri = '${file['uri'] ?? ''}';
+    final name = '${file['name'] ?? 'this file'}';
+    if (uri.isEmpty) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete MP3?'),
+        content: Text('Delete "$name" from Downloads/Voice Studio?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final deleted = await _channel.invokeMethod<bool>(
+        'deleteDownloadedFile', <String, dynamic>{'uri': uri},
+      );
+      if (deleted == true) {
+        await _loadFiles();
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('MP3 deleted.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not delete file: $error')),
+      );
+    }
+  }
+
+  String _size(dynamic value) {
+    final bytes = value is num ? value.toInt() : int.tryParse('$value') ?? 0;
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: page,
+      appBar: AppBar(
+        title: const Text('Downloaded Files', style: TextStyle(fontWeight: FontWeight.w800, color: dark)),
+        actions: [
+          IconButton(onPressed: _loadFiles, tooltip: 'Refresh', icon: const Icon(Icons.refresh_rounded)),
+          const SizedBox(width: 6),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadFiles,
+        child: loading
+            ? const Center(child: CircularProgressIndicator(color: mint))
+            : files.isEmpty
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: const [
+                      SizedBox(height: 150),
+                      Icon(Icons.download_for_offline_rounded, color: mint, size: 72),
+                      SizedBox(height: 18),
+                      Center(child: Text('No downloaded files', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: dark))),
+                      SizedBox(height: 6),
+                      Center(child: Text('Your Voice Studio MP3 files will appear here.', textAlign: TextAlign.center, style: TextStyle(color: Colors.black54))),
+                    ],
+                  )
+                : ListView.separated(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                    itemCount: files.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (_, index) {
+                      final file = files[index];
+                      final name = '${file['name'] ?? 'Voice Studio MP3'}';
+                      return Container(
+                        padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), border: Border.all(color: const Color(0xFFE5EEE9))),
+                        child: Row(
+                          children: [
+                            Container(width: 50, height: 50, decoration: BoxDecoration(color: const Color(0xFFE6F8F2), borderRadius: BorderRadius.circular(15)), child: const Icon(Icons.audio_file_rounded, color: mint, size: 28)),
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, color: dark)),
+                              const SizedBox(height: 4),
+                              Text(_size(file['size']), style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                            ])),
+                            IconButton(onPressed: () => _play(file), tooltip: 'Play', icon: const Icon(Icons.play_circle_fill_rounded, color: mint, size: 31)),
+                            IconButton(onPressed: () => _delete(file), tooltip: 'Delete', icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent)),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+      ),
+    );
+  }
+}
+
 class VoiceStudioApp extends StatelessWidget {
   const VoiceStudioApp({super.key});
 
@@ -832,6 +981,14 @@ class _HomePageState extends State<HomePage> {
 
   String _ttsLocale(String language) => _localePrefix(language);
 
+  Future<void> _openDownloads() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => const DownloadsPage(),
+      ),
+    );
+  }
+
   Future<void> _openStore() async {
     final uri = Uri.parse(appStoreUrl);
     try {
@@ -966,6 +1123,11 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
           actions: [
+            IconButton(
+              onPressed: _openDownloads,
+              tooltip: 'Downloaded files',
+              icon: const Icon(Icons.download_rounded),
+            ),
             IconButton(
               onPressed: _checkUpdate,
               tooltip: 'Check for Update',
