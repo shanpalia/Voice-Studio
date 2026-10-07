@@ -266,12 +266,16 @@ class _DownloadsPageState extends State<DownloadsPage> {
                             ),
                             const SizedBox(height: 3),
                             Text(
-                              processStatus,
-                              maxLines: 2,
+                              processError != null
+                                  ? 'Error: $processError'
+                                  : processStatus,
+                              maxLines: 4,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
-                                color: Colors.black54,
+                                color: processError != null
+                                    ? Colors.redAccent
+                                    : Colors.black54,
                               ),
                             ),
                           ],
