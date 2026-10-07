@@ -21,6 +21,24 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.8
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/voice_studio_icon.svg
+    - assets/voice_studio_splash.svg
+
+flutter_launcher_icons:
+  android: true
+  image_path: assets/voice_studio_icon.png
+  adaptive_icon_background: "#12C9A0"
+
+flutter_native_splash:
+  color: "#F8FFFC"
+  image: assets/voice_studio_splash.png
+  android_12:
+    color: "#F8FFFC"
+    image: assets/voice_studio_icon.png
+    icon_background_color: "#12C9A0"
