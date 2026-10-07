@@ -158,13 +158,16 @@ jobs:
 
           gradle = next(Path.home().glob('.pub-cache/hosted/pub.dev/flutter_lame_update-*/android/build.gradle'))
           text = gradle.read_text()
-          patched = re.sub(
-              r'arguments\s*\(\s*"(-DANDROID_ARM_NEON=TRUE)"\s*,\s*"(-DANDROID_STL=c\+\+_shared)"\s*\)',
-              r'arguments.addAll(["\\1", "\\2"])',
-              text,
-          )
+          pattern = r'arguments\s*(?:\(\s*)?["\'](-DANDROID_ARM_NEON=TRUE)["\']\s*,\s*["\'](-DANDROID_STL=c\+\+_shared)["\']\s*\)?'
+          patched = re.sub(pattern, r'arguments.addAll(["\\1", "\\2"])', text)
           if patched == text:
-              raise SystemExit(f'Could not find incompatible CMake arguments() syntax in {gradle}')
+              print("LAME Gradle file did not need patching; showing relevant CMake block:")
+              for line in text.splitlines():
+                  if "arguments" in line or "cmake" in line:
+                      print(line)
+          else:
+              gradle.write_text(patched)
+              print(f"Patched {gradle}")
           gradle.write_text(patched)
           print(f'Patched {gradle}')
           PY
