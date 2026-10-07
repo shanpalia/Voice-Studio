@@ -67,9 +67,11 @@ class _DownloadsPageState extends State<DownloadsPage> {
     try {
       await _channel.invokeMethod<void>('openDownloadedFile', <String, dynamic>{'uri': uri});
     } catch (_) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No app is available to play this MP3.')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No app is available to play this MP3.')),
+        );
+      }
     }
   }
 
@@ -95,14 +97,18 @@ class _DownloadsPageState extends State<DownloadsPage> {
       );
       if (deleted == true) {
         await _loadFiles();
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('MP3 deleted.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('MP3 deleted.')),
+          );
+        }
       }
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not delete file: $error')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete file: $error')),
+        );
+      }
     }
   }
 
