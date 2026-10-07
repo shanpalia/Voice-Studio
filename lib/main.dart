@@ -885,7 +885,7 @@ your language.',
         child: ListView(
           padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
           children: [
-            _sectionTitle('Voice Studio', 'Choose a voice, preview it, then create your audio.'),
+            _sectionTitle('Voice Studio', 'Select any available voice, preview it and create audio.'),
             const SizedBox(height: 14),
             _surface(
               child: Column(
@@ -899,27 +899,35 @@ your language.',
                     maxLines: 8,
                     decoration: const InputDecoration(hintText: 'Enter or translate text first...'),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
+                  _voiceSelector(),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
-                      Expanded(child: _voiceCard('Male', Icons.person_rounded, 'male')),
-                      const SizedBox(width: 10),
-                      Expanded(child: _voiceCard('Female', Icons.person_4_rounded, 'female')),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _downloadAudio,
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(50),
-                        side: const BorderSide(color: mint),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: _speak,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: dark,
+                            foregroundColor: Colors.white,
+                            minimumSize: const Size.fromHeight(50),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          icon: const Icon(Icons.play_arrow_rounded),
+                          label: const Text('Preview Voice'),
+                        ),
                       ),
-                      icon: const Icon(Icons.download_rounded, color: mint),
-                      label: const Text('Create & Share Audio'),
-                    ),
+                      const SizedBox(width: 10),
+                      IconButton.filledTonal(
+                        onPressed: _downloadAudio,
+                        tooltip: 'Download / Share',
+                        icon: const Icon(Icons.download_rounded, color: mint),
+                        style: IconButton.styleFrom(
+                          minimumSize: const Size(50, 50),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -929,6 +937,54 @@ your language.',
           ],
         ),
       );
+
+  Widget _voiceSelector() {
+    final selected = _selectedVoice();
+    return DropdownButtonFormField<String>(
+      initialValue: availableVoices.any((v) => '${v['name']}|${v['locale']}' == selectedVoiceKey)
+          ? selectedVoiceKey
+          : null,
+      isExpanded: true,
+      decoration: InputDecoration(
+        labelText: 'Voice',
+        hintText: availableVoices.isEmpty ? 'No voices loaded for this language' : 'Select a voice',
+        prefixIcon: const Icon(Icons.record_voice_over_rounded, color: mint),
+        suffixIcon: availableVoices.isNotEmpty
+            ? IconButton(
+                tooltip: 'Refresh voices',
+                onPressed: () => _loadVoices(),
+                icon: const Icon(Icons.refresh_rounded),
+              )
+            : null,
+      ),
+      items: availableVoices.map((voice) {
+        final key = '${voice['name']}|${voice['locale']}';
+        final name = voice['name'] ?? 'Voice';
+        final locale = voice['locale'] ?? '';
+        return DropdownMenuItem<String>(
+          value: key,
+          child: Row(
+            children: [
+              const Icon(Icons.graphic_eq_rounded, size: 19, color: mint),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Text(
+                  '$name  •  $locale',
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+      onChanged: availableVoices.isEmpty
+          ? null
+          : (value) {
+              if (value == null) return;
+              setState(() => selectedVoiceKey = value);
+            },
+    );
+  }
 
   Widget _voiceToVoiceCard() => _surface(
         child: Row(
@@ -1086,64 +1142,34 @@ your language.',
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text('Voice preview', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: dark)),
-                ),
-                Text(
-                  activeVoice == 'male' ? 'Male selected' : 'Female selected',
-                  style: const TextStyle(fontSize: 11, color: mint, fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
+            const Text('Voice', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: dark)),
+            const SizedBox(height: 4),
+            const Text('Choose from the voices installed on your device.', style: TextStyle(fontSize: 12, color: Colors.black54)),
             const SizedBox(height: 12),
+            _voiceSelector(),
+            const SizedBox(height: 10),
             Row(
               children: [
-                Expanded(child: _voiceCard('Male', Icons.person_rounded, 'male')),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _speak,
+                    icon: const Icon(Icons.play_circle_fill_rounded, color: mint),
+                    label: const Text('Preview'),
+                  ),
+                ),
                 const SizedBox(width: 10),
-                Expanded(child: _voiceCard('Female', Icons.person_4_rounded, 'female')),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _downloadAudio,
+                    icon: const Icon(Icons.download_rounded, color: mint),
+                    label: const Text('Download'),
+                  ),
+                ),
               ],
             ),
           ],
         ),
       );
-
-  Widget _voiceCard(String title, IconData icon, String voice) {
-    final selected = activeVoice == voice;
-    return Material(
-      color: selected ? const Color(0xFFE5F8F2) : const Color(0xFFF7FAF9),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: () => _speak(voice: voice),
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: selected ? mint : Colors.white,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: selected ? mint : const Color(0xFFDDE8E3)),
-                ),
-                child: Icon(icon, color: selected ? Colors.white : dark),
-              ),
-              const SizedBox(height: 8),
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w800, color: dark)),
-              const SizedBox(height: 3),
-              Text(
-                selected ? 'Playing' : 'Tap to preview',
-                style: const TextStyle(fontSize: 10, color: Colors.black54),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 
   Widget _sectionTitle(String title, String subtitle) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1188,14 +1214,22 @@ your language.',
         },
       );
 
-  Widget _branding() => const Column(
+  Widget _branding() => Container(
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+        decoration: BoxDecoration(
+          color: dark,
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: const Column(
         children: [
           Text(
-            'Branding by PaliaAPK HUB',
+            'PALIAAPK HUB',
             style: TextStyle(color: mint, fontWeight: FontWeight.w800),
           ),
           SizedBox(height: 3),
-          Text('Developer by shanpalia', style: TextStyle(color: Colors.black54, fontSize: 12)),
+          Text('Voice Studio', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+          SizedBox(height: 4),
+          Text('Developer by shanpalia', style: TextStyle(color: Colors.white70, fontSize: 12)),
         ],
       );
 }
