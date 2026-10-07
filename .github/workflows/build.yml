@@ -3,37 +3,74 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: '3.44.4'
           cache: true
+
       - name: Generate Android platform files
         run: flutter create . --project-name voice_studio --org com.shanpalia --platforms android
-      - name: Configure Android permissions
+
+      - name: Generate Voice Studio image assets
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+          mkdir -p assets
+          rsvg-convert -w 1024 -h 1024 assets/voice_studio_icon.svg -o assets/voice_studio_icon.png
+          rsvg-convert -w 1600 -h 900 assets/voice_studio_splash.svg -o assets/voice_studio_splash.png
+
+      - name: Configure Android permissions and speech recognition
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p = Path('android/app/src/main/AndroidManifest.xml')
           s = p.read_text()
           marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
-          perms = '  <uses-permission android:name="android.permission.INTERNET"/>\n  <uses-permission android:name="android.permission.RECORD_AUDIO"/>\n'
+          perms = '''  <uses-permission android:name="android.permission.INTERNET"/>
+            <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+            <uses-permission android:name="android.permission.BLUETOOTH"/>
+            <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
+            <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+          '''
           if 'android.permission.RECORD_AUDIO' not in s:
               s = s.replace(marker, marker + '\n' + perms)
+          if '<queries>' not in s:
+              s = s.replace(perms.rstrip(), perms.rstrip() + '''
+            <queries>
+              <intent>
+                <action android:name="android.speech.RecognitionService"/>
+              </intent>
+            </queries>''')
           s = s.replace('android:label="voice_studio"', 'android:label="Voice Studio"')
           p.write_text(s)
           PY
+
       - name: Get dependencies
         run: flutter pub get
+
+      - name: Generate launcher icons
+        run: dart run flutter_launcher_icons
+
+      - name: Generate native splash screen
+        run: dart run flutter_native_splash:create
+
       - name: Analyze
         run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
       - name: Build debug APK
         run: flutter build apk --debug
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
