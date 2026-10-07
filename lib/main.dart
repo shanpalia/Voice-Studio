@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -70,10 +68,8 @@ class _DownloadsPageState extends State<DownloadsPage> {
         var progress = downloadProgress;
         if (status.contains('Preparing')) {
           progress = 0.05;
-        } else if (status.contains('Generating WAV')) {
-          progress = 0.25;
-        } else if (status.contains('Converting WAV')) {
-          progress = 0.60;
+        } else if (status.contains('Generating MP3')) {
+          progress = 0.55;
         } else if (status.contains('Saving MP3')) {
           progress = 0.88;
         } else if (status.contains('complete')) {
