@@ -737,10 +737,8 @@ class _HomePageState extends State<HomePage> {
         true,
       );
 
-      if (synthResult is num && synthResult != 0) {
-        throw Exception('TTS synthesizeToFile returned status $synthResult.');
-      }
-
+      // flutter_tts uses 1 as the successful result on Android.
+      // Do not treat a non-zero result as an error; verify the actual file instead.
       var wavExists = await wavFile.exists();
       var wavSize = wavExists ? await wavFile.length() : 0;
 
