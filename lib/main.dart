@@ -1079,7 +1079,7 @@ class _HomePageState extends State<HomePage> {
             _settingsCard(
               icon: Icons.language_rounded,
               title: 'PaliaAPK HUB Website',
-              subtitle: 'Open the official Voice Studio website',
+              subtitle: 'shanpalia.github.io/WebsitePaliaAPK_V.2',
               onTap: _openStore,
             ),
             _settingsCard(
