@@ -343,28 +343,95 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  List<String> _splitForTranslation(String text, {int maxChars = 450}) {
+    final normalized = text.trim();
+    if (normalized.length <= maxChars) return [normalized];
+
+    final chunks = <String>[];
+    var remaining = normalized;
+
+    while (remaining.isNotEmpty) {
+      if (remaining.length <= maxChars) {
+        chunks.add(remaining);
+        break;
+      }
+
+      var cut = remaining.lastIndexOf(RegExp(r'\\s'), maxChars);
+      if (cut <= 0) {
+        cut = remaining.lastIndexOf(RegExp(r'[.!?。！？]'), maxChars);
+        if (cut > 0) cut += 1;
+      }
+      if (cut <= 0) cut = maxChars;
+
+      final chunk = remaining.substring(0, cut).trim();
+      if (chunk.isNotEmpty) chunks.add(chunk);
+      remaining = remaining.substring(cut).trimLeft();
+    }
+
+    return chunks;
+  }
+
+  Future<String> _translateChunk(String text) async {
+    final uri = Uri.https(
+      'api.mymemory.translated.net',
+      '/get',
+      <String, String>{
+        'q': text,
+        'langpair': '$from|$to',
+      },
+    );
+
+    final response =
+        await http.get(uri).timeout(const Duration(seconds: 20));
+
+    if (response.statusCode != 200) {
+      throw Exception('HTTP ${response.statusCode}');
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final translated =
+        '${data['responseData']?['translatedText'] ?? ''}'.trim();
+
+    if (translated.isEmpty) {
+      throw Exception('Empty translation');
+    }
+
+    return translated;
+  }
+
   Future<void> _translate() async {
-    if (input.text.trim().isEmpty) {
+    final text = input.text.trim();
+    if (text.isEmpty) {
       _showMessage('Enter or speak some text first.');
       return;
     }
+
     setState(() => busy = true);
+
     try {
-      final uri = Uri.parse(
-        'https://api.mymemory.translated.net/get?q=${Uri.encodeQueryComponent(input.text)}&langpair=$from|$to',
-      );
-      final response =
-          await http.get(uri).timeout(const Duration(seconds: 15));
-      if (response.statusCode != 200) throw Exception('HTTP ${response.statusCode}');
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
-      final translated = '${data['responseData']?['translatedText'] ?? ''}'.trim();
-      if (translated.isEmpty) throw Exception('Empty translation');
+      // MyMemory accepts only a limited query size. The user has no
+      // character limit here; long text is split internally and combined.
+      final chunks = _splitForTranslation(text);
+      final translatedChunks = <String>[];
+
+      for (final chunk in chunks) {
+        translatedChunks.add(await _translateChunk(chunk));
+      }
+
+      final translated = translatedChunks.join(' ').trim();
+      if (translated.isEmpty) {
+        throw Exception('Empty translation');
+      }
+
       output.text = translated;
       history.insert(0, translated);
       if (history.length > 20) history.removeLast();
+
       if (mounted) setState(() {});
     } catch (_) {
-      if (mounted) _showMessage('Translation service unavailable. Please try again.');
+      if (mounted) {
+        _showMessage('Translation service unavailable. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => busy = false);
     }
