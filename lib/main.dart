@@ -859,7 +859,7 @@ your language.',
               decoration: InputDecoration(
                 hintText: 'Your translated text will appear here.',
                 suffixIcon: IconButton(
-                  onPressed: () => _speak(voice: activeVoice),
+                  onPressed: _speak,
                   icon: const Icon(Icons.play_circle_fill_rounded, color: mint, size: 30),
                 ),
               ),
