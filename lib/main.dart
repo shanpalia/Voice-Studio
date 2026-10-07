@@ -12,7 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 const mint = Color(0xFF12C9A0);
 const dark = Color(0xFF102A43);
 const page = Color(0xFFF6FBF9);
-const currentVersion = '1.1.0';
+const currentVersion = '1.2.0';
 const appStoreUrl = 'https://shanpalia.github.io/WebsitePaliaAPK_V.2/';
 const versionUrl =
     'https://shanpalia.github.io/WebsitePaliaAPK_V.2/voice-studio/version.json';
@@ -98,50 +98,20 @@ class _SplashPageState extends State<SplashPage> {
       body: SafeArea(
         child: Center(
           child: Padding(
-            padding: const EdgeInsets.all(28),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  width: 112,
-                  height: 112,
-                  decoration: BoxDecoration(
-                    color: mint,
-                    borderRadius: BorderRadius.circular(34),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x2212C9A0),
-                        blurRadius: 30,
-                        offset: Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  child: const Icon(
-                    Icons.mic_rounded,
-                    color: Colors.white,
-                    size: 58,
+                Expanded(
+                  child: Center(
+                    child: Image.asset(
+                      'assets/voice_studio_splash.png',
+                      fit: BoxFit.contain,
+                      width: double.infinity,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 28),
-                const Text(
-                  'Voice Studio',
-                  style: TextStyle(
-                    fontSize: 34,
-                    fontWeight: FontWeight.w900,
-                    color: dark,
-                    letterSpacing: -0.8,
-                  ),
-                ),
-                const SizedBox(height: 9),
-                const Text(
-                  'Translate • Speak • Listen • Create',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black54,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 34),
+                const SizedBox(height: 8),
                 const SizedBox(
                   width: 28,
                   height: 28,
@@ -150,20 +120,13 @@ class _SplashPageState extends State<SplashPage> {
                     color: mint,
                   ),
                 ),
-                const SizedBox(height: 52),
+                const SizedBox(height: 14),
                 const Text(
-                  'Branding by PaliaAPK HUB',
+                  'Loading…',
                   style: TextStyle(
-                    color: mint,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Developer by shanpalia',
-                  style: TextStyle(
-                    color: Colors.black45,
-                    fontSize: 12,
+                    color: dark,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ],
@@ -193,6 +156,8 @@ class _HomePageState extends State<HomePage> {
   bool listening = false;
   bool busy = false;
   bool speaking = false;
+  bool speechUserStopped = false;
+  bool speechAutoStop = false;
   int selectedIndex = 0;
   String selectedVoiceKey = '';
   List<Map<String, String>> availableVoices = [];
@@ -256,25 +221,51 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<bool> _startSpeech({bool autoStop = false}) async {
+    speechAutoStop = autoStop;
     final available = await speech.initialize(
       debugLogging: true,
       onStatus: (status) {
         if (!mounted) return;
         if (status == 'done' || status == 'notListening') {
-          setState(() => listening = false);
+          if (speechUserStopped || speechAutoStop) {
+            setState(() => listening = false);
+            return;
+          }
+          // Android speech services can end a recognition session after
+          // silence. Restart it automatically until the user presses Stop.
+          unawaited(
+            Future<void>.delayed(const Duration(milliseconds: 250), () async {
+              if (!mounted || speechUserStopped || speechAutoStop || listening) {
+                return;
+              }
+              await _startSpeech();
+            }),
+          );
         }
       },
       onError: (error) {
         if (!mounted) return;
-        setState(() => listening = false);
+        if (speechUserStopped || speechAutoStop) {
+          setState(() => listening = false);
+          return;
+        }
         _showMessage(error.errorMsg.isEmpty
             ? 'Speech recognition failed.'
             : 'Speech recognition: ${error.errorMsg}');
+        unawaited(
+          Future<void>.delayed(const Duration(milliseconds: 350), () async {
+            if (!mounted || speechUserStopped || speechAutoStop || listening) {
+              return;
+            }
+            await _startSpeech();
+          }),
+        );
       },
     );
 
     if (!available) {
       if (mounted) {
+        setState(() => listening = false);
         _showMessage(
           'Speech recognition is not available. Check microphone and speech permissions.',
         );
@@ -289,9 +280,9 @@ class _HomePageState extends State<HomePage> {
       listenOptions: stt.SpeechListenOptions(
         localeId: localeId,
         partialResults: true,
-        cancelOnError: true,
-        listenFor: const Duration(seconds: 45),
-        pauseFor: const Duration(seconds: 5),
+        cancelOnError: false,
+        listenFor: const Duration(minutes: 5),
+        pauseFor: const Duration(seconds: 20),
         enableHapticFeedback: true,
       ),
       onResult: (result) {
@@ -308,15 +299,20 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _listen() async {
     if (listening) {
+      speechUserStopped = true;
+      speechAutoStop = false;
       await speech.stop();
       if (mounted) setState(() => listening = false);
       return;
     }
+    speechUserStopped = false;
+    speechAutoStop = false;
     await _startSpeech();
   }
 
   Future<void> _voiceToVoice() async {
     if (listening) return;
+    speechUserStopped = false;
     final started = await _startSpeech(autoStop: true);
     if (!started) return;
     if (!mounted) return;
@@ -1075,6 +1071,12 @@ class _HomePageState extends State<HomePage> {
               icon: Icons.grid_view_rounded,
               title: 'More Apps',
               subtitle: 'Explore PaliaAPK HUB',
+              onTap: _openStore,
+            ),
+            _settingsCard(
+              icon: Icons.language_rounded,
+              title: 'PaliaAPK HUB Website',
+              subtitle: 'Open the official Voice Studio website',
               onTap: _openStore,
             ),
             _settingsCard(
