@@ -24,7 +24,12 @@ const versionUrl =
 void main() => runApp(const VoiceStudioApp());
 
 class DownloadsPage extends StatefulWidget {
-  const DownloadsPage({super.key});
+  const DownloadsPage({
+    super.key,
+    this.startDownload,
+  });
+
+  final Future<void> Function(ValueChanged<String> onStatus)? startDownload;
 
   @override
   State<DownloadsPage> createState() => _DownloadsPageState();
@@ -35,11 +40,49 @@ class _DownloadsPageState extends State<DownloadsPage> {
 
   List<Map<String, dynamic>> files = [];
   bool loading = true;
+  bool processing = false;
+  String processStatus = 'Preparing download…';
+  String? processError;
 
   @override
   void initState() {
     super.initState();
     _loadFiles();
+    if (widget.startDownload != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startDownload());
+    }
+  }
+
+  Future<void> _startDownload() async {
+    if (widget.startDownload == null || processing) return;
+    if (mounted) {
+      setState(() {
+        processing = true;
+        processError = null;
+        processStatus = 'Preparing download…';
+      });
+    }
+
+    try {
+      await widget.startDownload!((status) {
+        if (mounted) setState(() => processStatus = status);
+      });
+      await _loadFiles();
+      if (mounted) {
+        setState(() {
+          processing = false;
+          processStatus = 'Download complete';
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          processing = false;
+          processError = error.toString().replaceFirst('Exception: ', '');
+          processStatus = 'Download failed';
+        });
+      }
+    }
   }
 
   Future<void> _loadFiles() async {
@@ -130,8 +173,10 @@ class _DownloadsPageState extends State<DownloadsPage> {
           const SizedBox(width: 6),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: _loadFiles,
+      body: Stack(
+        children: [
+          RefreshIndicator(
+            onRefresh: _loadFiles,
         child: loading
             ? const Center(child: CircularProgressIndicator(color: mint))
             : files.isEmpty
@@ -173,6 +218,80 @@ class _DownloadsPageState extends State<DownloadsPage> {
                       );
                     },
                   ),
+          ),
+          if (processing || processError != null || processStatus == 'Download complete')
+            Positioned(
+              left: 14,
+              right: 14,
+              top: 10,
+              child: Material(
+                elevation: 8,
+                borderRadius: BorderRadius.circular(20),
+                color: Colors.white,
+                child: Container(
+                  padding: const EdgeInsets.all(15),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: const Color(0xFFE5EEE9)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE6F8F2),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Icon(
+                          processError != null
+                              ? Icons.error_outline_rounded
+                              : processStatus == 'Download complete'
+                                  ? Icons.check_circle_rounded
+                                  : Icons.downloading_rounded,
+                          color: processError != null ? Colors.redAccent : mint,
+                        ),
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'MP3 Download',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: dark,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              processStatus,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (processing)
+                        const SizedBox(
+                          width: 21,
+                          height: 21,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.3,
+                            color: mint,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -667,82 +786,45 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
-    final nameController = TextEditingController(
-      text: 'Voice_Studio_${DateTime.now().millisecondsSinceEpoch}',
-    );
-
-    final fileName = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Name your MP3'),
-        content: TextField(
-          controller: nameController,
-          autofocus: true,
-          textInputAction: TextInputAction.done,
-          decoration: const InputDecoration(
-            labelText: 'File name',
-            hintText: 'Enter MP3 file name',
-            suffixText: '.mp3',
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => DownloadsPage(
+          startDownload: (onStatus) => _generateAudioFile(
+            text: text,
+            onStatus: onStatus,
           ),
-          onSubmitted: (_) {
-            final value = nameController.text.trim();
-            if (value.isNotEmpty) Navigator.pop(dialogContext, value);
-          },
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          FilledButton.icon(
-            onPressed: () {
-              final value = nameController.text.trim();
-              if (value.isNotEmpty) Navigator.pop(dialogContext, value);
-            },
-            icon: const Icon(Icons.download_rounded),
-            label: const Text('Download'),
-          ),
-        ],
       ),
     );
-    nameController.dispose();
+  }
 
-    if (fileName == null || fileName.trim().isEmpty) return;
+  Future<void> _generateAudioFile({
+    required String text,
+    required ValueChanged<String> onStatus,
+  }) async {
+    final cleanName = 'Voice_Studio_' +
+        DateTime.now().millisecondsSinceEpoch.toString();
 
-    final cleanName = fileName.trim()
-        .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')
-        .replaceAll(RegExp(r'\.mp3$', caseSensitive: false), '');
-    if (cleanName.isEmpty) {
-      _showMessage('Please enter a valid file name.');
-      return;
-    }
+    onStatus('Preparing voice…');
+    await tts.stop();
+    await tts.awaitSynthCompletion(true);
+    await tts.setLanguage(_ttsLocale(to));
+    await _applySelectedVoice();
+    await tts.setSpeechRate(0.46);
+    await tts.setPitch(1.0);
+    await tts.setVolume(1.0);
+
+    final directory = await getApplicationDocumentsDirectory();
+    final stamp = DateTime.now().millisecondsSinceEpoch;
+    final wavFile = File(directory.path + '/voice_studio_' + stamp.toString() + '.wav');
+    final mp3File = File(directory.path + '/' + cleanName + '.mp3');
 
     try {
-      await tts.stop();
-      await tts.awaitSynthCompletion(true);
-      await tts.setLanguage(_ttsLocale(to));
-      await _applySelectedVoice();
-      await tts.setSpeechRate(0.46);
-      await tts.setPitch(1.0);
-      await tts.setVolume(1.0);
+      onStatus('Generating WAV audio…');
+      await tts.synthesizeToFile(text, wavFile.path, true);
 
-      final directory = await getApplicationDocumentsDirectory();
-      final stamp = DateTime.now().millisecondsSinceEpoch;
-      final wavFile = File('${directory.path}/voice_studio_$stamp.wav');
-      final mp3File = File('${directory.path}/$cleanName.mp3');
-
-      await tts.synthesizeToFile(
-        text,
-        wavFile.path,
-        true,
-      );
-
-      // flutter_tts uses 1 as the successful result on Android.
-      // Do not treat a non-zero result as an error; verify the actual file instead.
       var wavExists = await wavFile.exists();
       var wavSize = wavExists ? await wavFile.length() : 0;
-
-      // Some Android TTS engines return before the file is visible.
       for (var i = 0; i < 40 && (!wavExists || wavSize < 44); i++) {
         await Future<void>.delayed(const Duration(milliseconds: 250));
         wavExists = await wavFile.exists();
@@ -750,53 +832,37 @@ class _HomePageState extends State<HomePage> {
       }
 
       if (!wavExists || wavSize < 44) {
-        if (wavExists) await wavFile.delete();
         throw Exception(
-          'TTS did not create a valid WAV file (size: $wavSize bytes).',
+          'TTS did not create a valid WAV file (size: ' + wavSize.toString() + ' bytes).',
         );
       }
 
+      onStatus('Converting WAV to MP3…');
       await _encodeWavToMp3(wavFile, mp3File);
       if (!await mp3File.exists() || await mp3File.length() == 0) {
-        await wavFile.delete().catchError((_) => wavFile);
-        await mp3File.delete().catchError((_) => mp3File);
-        if (mounted) _showMessage('MP3 audio could not be created. Please try again.');
-        return;
+        throw Exception('MP3 audio could not be created.');
       }
 
+      onStatus('Saving MP3 to Downloads…');
       final savedUri = await const MethodChannel(
         'voice_studio/download',
       ).invokeMethod<String>(
         'saveToDownloads',
         <String, dynamic>{
           'sourcePath': mp3File.path,
-          'fileName': '$cleanName.mp3',
+          'fileName': cleanName + '.mp3',
         },
       );
-
-      await wavFile.delete().catchError((_) => wavFile);
-      await mp3File.delete().catchError((_) => mp3File);
 
       if (savedUri == null || savedUri.isEmpty) {
         throw Exception('Download failed');
       }
-      if (!mounted) return;
-
-      // Open the Downloaded Files page immediately so the newly created MP3
-      // is visible there after the save completes.
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const DownloadsPage(),
-        ),
-      );
-    } catch (error) {
-      if (mounted) {
-        final message = error.toString().replaceFirst('Exception: ', '');
-        _showMessage('MP3 generation failed: $message');
-      }
+      onStatus('Download complete');
+    } finally {
+      await wavFile.delete().catchError((_) => wavFile);
+      await mp3File.delete().catchError((_) => mp3File);
     }
   }
-
   Future<void> _encodeWavToMp3(File wavFile, File mp3File) async {
     final bytes = await wavFile.readAsBytes();
     if (bytes.length < 44) {
