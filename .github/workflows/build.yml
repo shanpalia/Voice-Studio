@@ -1,4 +1,5 @@
 name: Build Voice Studio APK
+
 on:
   push:
     branches: [main]
@@ -7,19 +8,23 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
 
-      - uses: subosito/flutter-action@v2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
           flutter-version: '3.44.4'
           cache: true
 
-      - name: Generate Android platform files
+      - name: Generate Android platform
         run: flutter create . --project-name voice_studio --org com.shanpalia --platforms android
 
-      - name: Configure direct Android Downloads
+      - name: Configure Android native download bridge
+        shell: bash
         run: |
           mkdir -p android/app/src/main/kotlin/com/shanpalia/voice_studio
           cat > android/app/src/main/kotlin/com/shanpalia/voice_studio/MainActivity.kt <<'KOTLIN'
@@ -30,6 +35,7 @@ jobs:
           import android.os.Build
           import android.os.Environment
           import android.provider.MediaStore
+          import android.net.Uri
           import io.flutter.embedding.android.FlutterActivity
           import io.flutter.embedding.engine.FlutterEngine
           import io.flutter.plugin.common.MethodChannel
@@ -40,77 +46,92 @@ jobs:
 
               override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
                   super.configureFlutterEngine(flutterEngine)
+
                   MethodChannel(flutterEngine.dartExecutor.binaryMessenger, channel)
                       .setMethodCallHandler { call, result ->
-                          if (call.method == "openDownloadedFile") {
-                              val uriString = call.argument<String>("uri")
-                              if (uriString.isNullOrBlank()) {
-                                  result.error("INVALID_URI", "Downloaded file URI is missing.", null)
-                                  return@setMethodCallHandler
-                              }
-                              try {
-                                  val intent = Intent(Intent.ACTION_VIEW).apply {
-                                      setDataAndType(android.net.Uri.parse(uriString), "audio/mpeg")
-                                      addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                      addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                          when (call.method) {
+                              "openDownloadedFile" -> {
+                                  val uriString = call.argument<String>("uri")
+                                  if (uriString.isNullOrBlank()) {
+                                      result.error("INVALID_URI", "Downloaded file URI is missing.", null)
+                                      return@setMethodCallHandler
                                   }
-                                  startActivity(intent)
-                                  result.success(null)
-                              } catch (error: Exception) {
-                                  result.error("OPEN_FAILED", error.message ?: "Could not open MP3 file.", null)
-                              }
-                              return@setMethodCallHandler
-                          }
-                          if (call.method != "saveToDownloads") {
-                              result.notImplemented()
-                              return@setMethodCallHandler
-                          }
-
-                          val sourcePath = call.argument<String>("sourcePath")
-                          val fileName = call.argument<String>("fileName")
-                          if (sourcePath.isNullOrBlank() || fileName.isNullOrBlank()) {
-                              result.error("INVALID_ARGUMENT", "Audio file path is missing.", null)
-                              return@setMethodCallHandler
-                          }
-
-                          try {
-                              val source = File(sourcePath)
-                              if (!source.exists() || source.length() == 0L) {
-                                  result.error("EMPTY_FILE", "Generated audio file is empty.", null)
-                                  return@setMethodCallHandler
-                              }
-                              if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                  val values = ContentValues().apply {
-                                      put(MediaStore.Downloads.DISPLAY_NAME, fileName)
-                                      put(MediaStore.Downloads.MIME_TYPE, "audio/mpeg")
-                                      put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/Voice Studio")
-                                      put(MediaStore.Downloads.IS_PENDING, 1)
-                                  }
-                                  val uri = contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                                      ?: throw IllegalStateException("Could not create Downloads file")
                                   try {
-                                      contentResolver.openOutputStream(uri)?.use { output ->
-                                          source.inputStream().use { input -> input.copyTo(output) }
-                                      } ?: throw IllegalStateException("Could not open Downloads file")
-                                      val done = ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }
-                                      contentResolver.update(uri, done, null, null)
-                                      result.success(uri.toString())
+                                      val intent = Intent(Intent.ACTION_VIEW).apply {
+                                          setDataAndType(Uri.parse(uriString), "audio/mpeg")
+                                          addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                      }
+                                      startActivity(intent)
+                                      result.success(null)
                                   } catch (error: Exception) {
-                                      contentResolver.delete(uri, null, null)
-                                      throw error
+                                      result.error("OPEN_FAILED", error.message ?: "Could not open MP3 file.", null)
                                   }
-                              } else {
-                                  result.error("UNSUPPORTED_ANDROID", "Direct Downloads requires Android 10 or newer.", null)
                               }
-                          } catch (error: Exception) {
-                              result.error("DOWNLOAD_FAILED", error.message ?: "Could not save audio.", null)
+
+                              "saveToDownloads" -> {
+                                  val sourcePath = call.argument<String>("sourcePath")
+                                  val fileName = call.argument<String>("fileName")
+
+                                  if (sourcePath.isNullOrBlank() || fileName.isNullOrBlank()) {
+                                      result.error("INVALID_ARGUMENT", "Audio file path or name is missing.", null)
+                                      return@setMethodCallHandler
+                                  }
+
+                                  try {
+                                      val source = File(sourcePath)
+                                      if (!source.exists() || source.length() == 0L) {
+                                          result.error("EMPTY_FILE", "Generated audio file is empty.", null)
+                                          return@setMethodCallHandler
+                                      }
+
+                                      if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                                          result.error("UNSUPPORTED_ANDROID", "Direct Downloads requires Android 10 or newer.", null)
+                                          return@setMethodCallHandler
+                                      }
+
+                                      val values = ContentValues().apply {
+                                          put(MediaStore.Downloads.DISPLAY_NAME, fileName)
+                                          put(MediaStore.Downloads.MIME_TYPE, "audio/mpeg")
+                                          put(
+                                              MediaStore.Downloads.RELATIVE_PATH,
+                                              Environment.DIRECTORY_DOWNLOADS + "/Voice Studio"
+                                          )
+                                          put(MediaStore.Downloads.IS_PENDING, 1)
+                                      }
+
+                                      val uri = contentResolver.insert(
+                                          MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                                          values
+                                      ) ?: throw IllegalStateException("Could not create Downloads file")
+
+                                      try {
+                                          contentResolver.openOutputStream(uri)?.use { output ->
+                                              source.inputStream().use { input -> input.copyTo(output) }
+                                          } ?: throw IllegalStateException("Could not open Downloads file")
+
+                                          val done = ContentValues().apply {
+                                              put(MediaStore.Downloads.IS_PENDING, 0)
+                                          }
+                                          contentResolver.update(uri, done, null, null)
+                                          result.success(uri.toString())
+                                      } catch (error: Exception) {
+                                          contentResolver.delete(uri, null, null)
+                                          throw error
+                                      }
+                                  } catch (error: Exception) {
+                                      result.error("DOWNLOAD_FAILED", error.message ?: "Could not save audio.", null)
+                                  }
+                              }
+
+                              else -> result.notImplemented()
                           }
                       }
               }
           }
           KOTLIN
 
-      - name: Generate Voice Studio image assets
+      - name: Generate image assets
         run: |
           sudo apt-get update
           sudo apt-get install -y librsvg2-bin
@@ -118,19 +139,52 @@ jobs:
           rsvg-convert -w 1024 -h 1024 assets/voice_studio_icon.svg -o assets/voice_studio_icon.png
           rsvg-convert -w 900 -h 1600 assets/voice_studio_splash.svg -o assets/voice_studio_splash.png
 
-      - name: Configure Android permissions and speech recognition
+      - name: Configure Android permissions
+        shell: bash
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p = Path('android/app/src/main/AndroidManifest.xml')
-          s = p.read_text()
-          marker = '<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
-          perms = '''  <uses-permission android:name="android.permission.INTERNET"/>
-            <uses-permission android:name="android.permission.RECORD_AUDIO"/>
-            <uses-permission android:name="android.permission.BLUETOOTH"/>
+
+          path = Path("android/app/src/main/AndroidManifest.xml")
+          text = path.read_text()
+
+          permissions = [
+              '    <uses-permission android:name="android.permission.INTERNET"/>',
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO"/>',
+              '    <uses-permission android:name="android.permission.BLUETOOTH"/>',
+          ]
+
+          marker = '<application'
+          if marker in text:
+              block = "\n".join(permissions) + "\n\n"
+              missing = [p for p in permissions if p not in text]
+              if missing:
+                  text = text.replace(marker, "\n".join(missing) + "\n" + marker, 1)
+
+          queries = '''
+              <queries>
+                  <intent>
+                      <action android:name="android.speech.RecognitionService" />
+                  </intent>
+                  <intent>
+                      <action android:name="android.intent.action.TTS_SERVICE" />
+                  </intent>
+              </queries>
+          '''
+
+          if '<queries>' not in text:
+              text = text.replace('<application', queries + '\n    <application', 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Generate launcher icons
         run: dart run flutter_launcher_icons
 
-      - name: Generate native splash screen
+      - name: Generate native splash
         run: dart run flutter_native_splash:create
 
       - name: Analyze
@@ -140,13 +194,6 @@ jobs:
         run: flutter test
 
       - name: Build release APK
-        run: flutter build apk --release
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: voice-studio-release-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
         run: flutter build apk --release
 
       - name: Upload APK
