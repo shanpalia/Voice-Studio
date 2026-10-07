@@ -159,7 +159,7 @@ jobs:
           gradle = next(Path.home().glob('.pub-cache/hosted/pub.dev/flutter_lame_update-*/android/build.gradle'))
           text = gradle.read_text()
           patched = re.sub(
-              r'arguments\\s*\\(\\s*"(-DANDROID_ARM_NEON=TRUE)"\\s*,\\s*"(-DANDROID_STL=c\\+\\+_shared)"\\s*\\)',
+              r'arguments\s*\(\s*"(-DANDROID_ARM_NEON=TRUE)"\s*,\s*"(-DANDROID_STL=c\+\+_shared)"\s*\)',
               r'arguments.addAll(["\\1", "\\2"])',
               text,
           )
