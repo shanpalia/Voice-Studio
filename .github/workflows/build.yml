@@ -69,6 +69,71 @@ jobs:
                                   }
                               }
 
+                              "listDownloads" -> {
+                                  if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                                      result.success(emptyList<Map<String, Any>>())
+                                      return@setMethodCallHandler
+                                  }
+
+                                  val files = mutableListOf<Map<String, Any>>()
+                                  val projection = arrayOf(
+                                      MediaStore.Downloads._ID,
+                                      MediaStore.Downloads.DISPLAY_NAME,
+                                      MediaStore.Downloads.SIZE,
+                                      MediaStore.Downloads.MIME_TYPE,
+                                      MediaStore.Downloads.RELATIVE_PATH
+                                  )
+                                  val selection = "${MediaStore.Downloads.RELATIVE_PATH} = ?"
+                                  val selectionArgs = arrayOf(
+                                      Environment.DIRECTORY_DOWNLOADS + "/Voice Studio/"
+                                  )
+
+                                  contentResolver.query(
+                                      MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                                      projection,
+                                      selection,
+                                      selectionArgs,
+                                      "${MediaStore.Downloads.DATE_ADDED} DESC"
+                                  )?.use { cursor ->
+                                      val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID)
+                                      val nameIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads.DISPLAY_NAME)
+                                      val sizeIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads.SIZE)
+                                      val mimeIndex = cursor.getColumnIndexOrThrow(MediaStore.Downloads.MIME_TYPE)
+
+                                      while (cursor.moveToNext()) {
+                                          val uri = Uri.withAppendedPath(
+                                              MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                                              cursor.getLong(idIndex).toString()
+                                          )
+                                          val mime = cursor.getString(mimeIndex) ?: ""
+                                          if (mime == "audio/mpeg" || cursor.getString(nameIndex).lowercase().endsWith(".mp3")) {
+                                              files.add(
+                                                  mapOf(
+                                                      "uri" to uri.toString(),
+                                                      "name" to cursor.getString(nameIndex),
+                                                      "size" to cursor.getLong(sizeIndex)
+                                                  )
+                                              )
+                                          }
+                                      }
+                                  }
+                                  result.success(files)
+                              }
+
+                              "deleteDownloadedFile" -> {
+                                  val uriString = call.argument<String>("uri")
+                                  if (uriString.isNullOrBlank()) {
+                                      result.error("INVALID_URI", "Downloaded file URI is missing.", null)
+                                      return@setMethodCallHandler
+                                  }
+                                  try {
+                                      val deleted = contentResolver.delete(Uri.parse(uriString), null, null)
+                                      result.success(deleted > 0)
+                                  } catch (error: Exception) {
+                                      result.error("DELETE_FAILED", error.message ?: "Could not delete file.", null)
+                                  }
+                              }
+
                               "saveToDownloads" -> {
                                   val sourcePath = call.argument<String>("sourcePath")
                                   val fileName = call.argument<String>("fileName")
